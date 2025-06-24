@@ -16,7 +16,9 @@
 # limitations under the License.
 
 
+import glob
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -111,7 +113,7 @@ def load_checkpoint(
     strict: bool = False,
 ) -> Dict[str, Any]:
     logging.info(f"Loading checkpoint from {filename}")
-    checkpoint = torch.load(filename, map_location="cpu")
+    checkpoint = torch.load(filename, map_location="cpu", weights_only=False)
 
     if model is not None:
 

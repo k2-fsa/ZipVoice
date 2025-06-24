@@ -27,6 +27,7 @@ import inflect
 import jieba
 from pypinyin import Style, lazy_pinyin
 from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
+from unidecode import unidecode
 
 try:
     from piper_phonemize import phonemize_espeak
@@ -334,6 +335,7 @@ def get_segment(text: str) -> List[str]:
 
 def custom_english_cleaners(text):
     """Custom pipeline for English text, including number and abbreviation expansion."""
+    text = unidecode(text)
     text = lowercase(text)
     text = normalize_numbers(text)
     text = expand_abbreviations(text)

@@ -12,6 +12,7 @@ vocos
 # Normalization
 cn2an
 inflect
+unidecode
 
 # Tokenization
 jieba
