@@ -22,7 +22,13 @@ import random
 import sys
 from typing import Optional, Tuple, Union
 
-import k2
+try:
+    import k2
+except Exception as ex:
+    logging.warning(
+        "k2 is not installed correctly. Swoosh functions will fallback to "
+        "pytorch implementation."
+    )
 import torch
 import torch.nn as nn
 from torch import Tensor
