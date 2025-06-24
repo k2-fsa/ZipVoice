@@ -61,14 +61,6 @@ python3 zipvoice/zipvoice_infer.py \
     --prompt-text "I am the transcription of the prompt wav." \
     --text "I am the text to be synthesized." \
     --res-wav-path result.wav
-
-# Example with a pre-defined prompt wav and text
-python3 zipvoice/zipvoice_infer.py \
-    --model-name "zipvoice" \
-    --prompt-wav resources/prompt.wav \
-    --prompt-text "Some call me nature, others call me mother nature. I've been here for over four point five billion years, twenty two thousand five hundred times longer than you." \
-    --text "Welcome to use our tts model, have fun!" \
-    --res-wav-path result.wav
 ```
 
 ### 2. Inference of a list of sentences:
