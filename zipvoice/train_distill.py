@@ -82,7 +82,7 @@ from lhotse.cut import Cut, CutSet
 from lhotse.utils import fix_random_seed
 from model import get_distill_model, get_model
 from optim import FixedLRScheduler, ScaledAdam
-from tokenizer import TokenizerEmilia, TokenizerLibriTTS
+from tokenizer import EmiliaTokenizer, LibriTTSTokenizer
 from torch import Tensor
 from torch.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -795,11 +795,11 @@ def run(rank, world_size, args):
     logging.info(f"Device: {device}")
 
     if params.dataset == "emilia":
-        tokenizer = TokenizerEmilia(
+        tokenizer = EmiliaTokenizer(
             token_file=params.token_file, token_type=params.token_type
         )
     elif params.dataset == "libritts":
-        tokenizer = TokenizerLibriTTS(
+        tokenizer = LibriTTSTokenizer(
             token_file=params.token_file, token_type=params.token_type
         )
 

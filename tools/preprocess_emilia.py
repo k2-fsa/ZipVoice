@@ -24,18 +24,12 @@ import argparse
 import glob
 import logging
 import os
+import re
+import unicodedata
 from concurrent.futures import ProcessPoolExecutor as Pool
 from pathlib import Path
-from typing import List
 
-from lhotse import CutSet, load_manifest_lazy
-from tokenizer import (
-    is_alphabet,
-    is_chinese,
-    is_hangul,
-    is_japanese,
-    tokenize_by_CJK_char,
-)
+from lhotse import load_manifest_lazy
 
 
 def get_args():
@@ -69,6 +63,72 @@ def get_args():
     )
 
     return parser.parse_args()
+
+
+def tokenize_by_CJK_char(text: str) -> str:
+    """
+    Tokenize a line of text with CJK char.
+
+    Example:
+    input = "你好世界是 hello world 的中文"
+    output = "你 好 世 界 是 hello world 的 中 文"
+    """
+    pattern = re.compile(
+        r"("
+        r"[\u1100-\u11ff"
+        r"\u2e80-\ua4cf"
+        r"\ua840-\uD7AF"
+        r"\uF900-\uFAFF"
+        r"\uFE30-\uFE4F"
+        r"\uFF65-\uFFDC"
+        r"\U00020000-\U0002FFFF]"
+        r")"
+    )
+    chars = pattern.split(text.strip())
+    text = " ".join([w.strip() for w in chars if w.strip()])
+    return text
+
+
+def is_hangul(char):
+    letters = unicodedata.normalize("NFD", char)
+    return all(
+        [
+            "\u1100" <= c <= "\u11ff" or "\u3131" <= c <= "\u318e"
+            for c in letters
+        ]
+    )
+
+
+def is_japanese(char):
+    return any(
+        [
+            start <= char <= end
+            for start, end in [
+                ("\u3041", "\u3096"),
+                ("\u30a0", "\u30ff"),
+                ("\uff5f", "\uff9f"),
+                ("\u31f0", "\u31ff"),
+                ("\u3220", "\u3243"),
+                ("\u3280", "\u337f"),
+            ]
+        ]
+    )
+
+
+def is_chinese(char):
+    if char >= "\u4e00" and char <= "\u9fa5":
+        return True
+    else:
+        return False
+
+
+def is_alphabet(char):
+    if (char >= "\u0041" and char <= "\u005a") or (
+        char >= "\u0061" and char <= "\u007a"
+    ):
+        return True
+    else:
+        return False
 
 
 def preprocess_emilia(file_name: str, input_dir: Path, output_dir: Path):
@@ -105,7 +165,9 @@ def preprocess_emilia(file_name: str, input_dir: Path, output_dir: Path):
             if x == " ":
                 clean_chars.append(x)
         if len(english) + len(chinese) == 0:
-            logging.warning(f"Delete cut with text has no valid chars : {text}")
+            logging.warning(
+                f"Delete cut with text has no valid chars : {text}"
+            )
             return False
 
         words = tokenize_by_CJK_char("".join(clean_chars))

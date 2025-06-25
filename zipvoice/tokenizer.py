@@ -18,7 +18,7 @@
 
 import logging
 import re
-import unicodedata
+from abc import ABC, abstractmethod
 from functools import reduce
 from typing import Dict, List, Optional
 
@@ -34,376 +34,256 @@ try:
 except Exception as ex:
     raise RuntimeError(
         f"{ex}\nPlease run\n"
-        "pip install piper_phonemize -f https://k2-fsa.github.io/icefall/piper_phonemize.html"
-    )
-
-_inflect = inflect.engine()
-_comma_number_re = re.compile(r"([0-9][0-9\,]+[0-9])")
-_decimal_number_re = re.compile(r"([0-9]+\.[0-9]+)")
-_percent_number_re = re.compile(r"([0-9\.\,]*[0-9]+%)")
-_pounds_re = re.compile(r"£([0-9\,]*[0-9]+)")
-_dollars_re = re.compile(r"\$([0-9\.\,]*[0-9]+)")
-_fraction_re = re.compile(r"([0-9]+)/([0-9]+)")
-_ordinal_re = re.compile(r"[0-9]+(st|nd|rd|th)")
-_number_re = re.compile(r"[0-9]+")
-_whitespace_re = re.compile(r"\s+")
-
-# List of (regular expression, replacement) pairs for abbreviations:
-_abbreviations = [
-    (re.compile("\\b%s\\b" % x[0], re.IGNORECASE), x[1])
-    for x in [
-        ("mrs", "misess"),
-        ("mr", "mister"),
-        ("dr", "doctor"),
-        ("st", "saint"),
-        ("co", "company"),
-        ("jr", "junior"),
-        ("maj", "major"),
-        ("gen", "general"),
-        ("drs", "doctors"),
-        ("rev", "reverend"),
-        ("lt", "lieutenant"),
-        ("hon", "honorable"),
-        ("sgt", "sergeant"),
-        ("capt", "captain"),
-        ("esq", "esquire"),
-        ("ltd", "limited"),
-        ("col", "colonel"),
-        ("ft", "fort"),
-        ("etc", "et cetera"),
-        ("btw", "by the way"),
-    ]
-]
-
-
-def intersperse(sequence, item=0):
-    result = [item] * (len(sequence) * 2 + 1)
-    result[1::2] = sequence
-    return result
-
-
-def expand_abbreviations(text):
-    for regex, replacement in _abbreviations:
-        text = re.sub(regex, replacement, text)
-    return text
-
-
-def _remove_commas(m):
-    return m.group(1).replace(",", "")
-
-
-def _expand_decimal_point(m):
-    return m.group(1).replace(".", " point ")
-
-
-def _expand_percent(m):
-    return m.group(1).replace("%", " percent ")
-
-
-def _expand_dollars(m):
-    match = m.group(1)
-    parts = match.split(".")
-    if len(parts) > 2:
-        return " " + match + " dollars "  # Unexpected format
-    dollars = int(parts[0]) if parts[0] else 0
-    cents = int(parts[1]) if len(parts) > 1 and parts[1] else 0
-    if dollars and cents:
-        dollar_unit = "dollar" if dollars == 1 else "dollars"
-        cent_unit = "cent" if cents == 1 else "cents"
-        return " %s %s, %s %s " % (dollars, dollar_unit, cents, cent_unit)
-    elif dollars:
-        dollar_unit = "dollar" if dollars == 1 else "dollars"
-        return " %s %s " % (dollars, dollar_unit)
-    elif cents:
-        cent_unit = "cent" if cents == 1 else "cents"
-        return " %s %s " % (cents, cent_unit)
-    else:
-        return " zero dollars "
-
-
-def fraction_to_words(numerator, denominator):
-    if numerator == 1 and denominator == 2:
-        return " one half "
-    if numerator == 1 and denominator == 4:
-        return " one quarter "
-    if denominator == 2:
-        return " " + _inflect.number_to_words(numerator) + " halves "
-    if denominator == 4:
-        return " " + _inflect.number_to_words(numerator) + " quarters "
-    return (
-        " "
-        + _inflect.number_to_words(numerator)
-        + " "
-        + _inflect.ordinal(_inflect.number_to_words(denominator))
-        + " "
+        "pip install piper_phonemize -f \
+            https://k2-fsa.github.io/icefall/piper_phonemize.html"
     )
 
 
-def _expand_fraction(m):
-    numerator = int(m.group(1))
-    denominator = int(m.group(2))
-    return fraction_to_words(numerator, denominator)
+class TextNormalizer(ABC):
+    """Abstract base class for text normalization, defining common interface."""
+
+    @abstractmethod
+    def normalize(self, text: str) -> str:
+        """Normalize text."""
+        raise NotImplementedError
 
 
-def _expand_ordinal(m):
-    return " " + _inflect.number_to_words(m.group(0)) + " "
+class EnglishTextNormalizer(TextNormalizer):
+    """
+    A class to handle preprocessing of English text including normalization. Following:
+    https://github.com/espnet/espnet_tts_frontend/blob/master/tacotron_cleaner/cleaners.py
+    """
 
-
-def _expand_number(m):
-    num = int(m.group(0))
-    if num > 1000 and num < 3000:
-        if num == 2000:
-            return " two thousand "
-        elif num > 2000 and num < 2010:
-            return " two thousand " + _inflect.number_to_words(num % 100) + " "
-        elif num % 100 == 0:
-            return " " + _inflect.number_to_words(num // 100) + " hundred "
-        else:
-            return (
-                " "
-                + _inflect.number_to_words(
-                    num, andword="", zero="oh", group=2
-                ).replace(", ", " ")
-                + " "
-            )
-    else:
-        return " " + _inflect.number_to_words(num, andword="") + " "
-
-
-# Normalize numbers pronunciation
-def normalize_numbers(text):
-    text = re.sub(_comma_number_re, _remove_commas, text)
-    text = re.sub(_pounds_re, r"\1 pounds", text)
-    text = re.sub(_dollars_re, _expand_dollars, text)
-    text = re.sub(_fraction_re, _expand_fraction, text)
-    text = re.sub(_decimal_number_re, _expand_decimal_point, text)
-    text = re.sub(_percent_number_re, _expand_percent, text)
-    text = re.sub(_ordinal_re, _expand_ordinal, text)
-    text = re.sub(_number_re, _expand_number, text)
-    return text
-
-
-# Convert numbers to Chinese pronunciation
-def number_to_chinese(text):
-    text = cn2an.transform(text, "an2cn")
-    return text
-
-
-def map_punctuations(text):
-    text = text.replace("，", ",")
-    text = text.replace("。", ".")
-    text = text.replace("！", "!")
-    text = text.replace("？", "?")
-    text = text.replace("；", ";")
-    text = text.replace("：", ":")
-    text = text.replace("、", ",")
-    text = text.replace("‘", "'")
-    text = text.replace("“", '"')
-    text = text.replace("”", '"')
-    text = text.replace("’", "'")
-    text = text.replace("⋯", "…")
-    text = text.replace("···", "…")
-    text = text.replace("・・・", "…")
-    text = text.replace("...", "…")
-    return text
-
-
-def preprocess(text: str) -> str:
-    text = map_punctuations(text)
-    return text
-
-
-def lowercase(text):
-    return text.lower()
-
-
-def uppercase(text):
-    return text.upper()
-
-
-def convert_to_ascii(text):
-    return unidecode(text)
-
-
-def remove_unnecessary_symbols(text):
-    text = re.sub(r"[\(\)\[\]\<\>\"]+", "", text)
-    return text
-
-
-def expand_symbols(text):
-    text = re.sub("\;", ",", text)
-    text = re.sub("\:", ",", text)
-    text = re.sub("\-", " ", text)
-    text = re.sub("\&", "and", text)
-    return text
-
-
-def collapse_whitespace(text):
-    return re.sub(_whitespace_re, " ", text)
-
-
-def is_chinese(char):
-    if char >= "\u4e00" and char <= "\u9fa5":
-        return True
-    else:
-        return False
-
-
-def is_alphabet(char):
-    if (char >= "\u0041" and char <= "\u005a") or (
-        char >= "\u0061" and char <= "\u007a"
-    ):
-        return True
-    else:
-        return False
-
-
-def is_hangul(char):
-    letters = unicodedata.normalize("NFD", char)
-    return all(
-        [
-            "\u1100" <= c <= "\u11ff" or "\u3131" <= c <= "\u318e"
-            for c in letters
-        ]
-    )
-
-
-def is_japanese(char):
-    return any(
-        [
-            start <= char <= end
-            for start, end in [
-                ("\u3041", "\u3096"),
-                ("\u30a0", "\u30ff"),
-                ("\uff5f", "\uff9f"),
-                ("\u31f0", "\u31ff"),
-                ("\u3220", "\u3243"),
-                ("\u3280", "\u337f"),
+    def __init__(self):
+        # List of (regular expression, replacement) pairs for abbreviations:
+        self._abbreviations = [
+            (re.compile("\\b%s\\b" % x[0], re.IGNORECASE), x[1])
+            for x in [
+                ("mrs", "misess"),
+                ("mr", "mister"),
+                ("dr", "doctor"),
+                ("st", "saint"),
+                ("co", "company"),
+                ("jr", "junior"),
+                ("maj", "major"),
+                ("gen", "general"),
+                ("drs", "doctors"),
+                ("rev", "reverend"),
+                ("lt", "lieutenant"),
+                ("hon", "honorable"),
+                ("sgt", "sergeant"),
+                ("capt", "captain"),
+                ("esq", "esquire"),
+                ("ltd", "limited"),
+                ("col", "colonel"),
+                ("ft", "fort"),
+                ("etc", "et cetera"),
+                ("btw", "by the way"),
             ]
         ]
-    )
 
+        self._inflect = inflect.engine()
+        self._comma_number_re = re.compile(r"([0-9][0-9\,]+[0-9])")
+        self._decimal_number_re = re.compile(r"([0-9]+\.[0-9]+)")
+        self._percent_number_re = re.compile(r"([0-9\.\,]*[0-9]+%)")
+        self._pounds_re = re.compile(r"£([0-9\,]*[0-9]+)")
+        self._dollars_re = re.compile(r"\$([0-9\.\,]*[0-9]+)")
+        self._fraction_re = re.compile(r"([0-9]+)/([0-9]+)")
+        self._ordinal_re = re.compile(r"[0-9]+(st|nd|rd|th)")
+        self._number_re = re.compile(r"[0-9]+")
+        self._whitespace_re = re.compile(r"\s+")
 
-def get_segment(text: str) -> List[str]:
-    # sentence --> [ch_part, en_part, ch_part, ...]
-    # example :
-    # input : 我们是小米人,是吗? Yes I think so!霍...啦啦啦
-    # output : [('我们是小米人,是吗? ', 'zh'), ('Yes I think so!', 'en'), ('霍...啦啦啦', 'zh')]
-    segments = []
-    types = []
-    flag = 0
-    temp_seg = ""
-    temp_lang = ""
+    def normalize(self, text: str) -> str:
+        """Custom pipeline for English text,
+        including number and abbreviation expansion."""
+        text = self.expand_abbreviations(text)
+        text = self.normalize_numbers(text)
 
-    for i, ch in enumerate(text):
-        if is_chinese(ch):
-            types.append("zh")
-        elif is_alphabet(ch):
-            types.append("en")
-        else:
-            types.append("other")
+        return text
 
-    assert len(types) == len(text)
-
-    for i in range(len(types)):
-        # find the first char of the seg
-        if flag == 0:
-            temp_seg += text[i]
-            temp_lang = types[i]
-            flag = 1
-        else:
-            if temp_lang == "other":
-                if types[i] == temp_lang:
-                    temp_seg += text[i]
-                else:
-                    temp_seg += text[i]
-                    temp_lang = types[i]
-            else:
-                if types[i] == temp_lang:
-                    temp_seg += text[i]
-                elif types[i] == "other":
-                    temp_seg += text[i]
-                else:
-                    segments.append((temp_seg, temp_lang))
-                    temp_seg = text[i]
-                    temp_lang = types[i]
-                    flag = 1
-
-    segments.append((temp_seg, temp_lang))
-    return segments
-
-
-def custom_english_cleaners(text):
-    """Custom pipeline for English text, including number and abbreviation expansion."""
-    text = unidecode(text)
-    text = lowercase(text)
-    text = normalize_numbers(text)
-    text = expand_abbreviations(text)
-    text = expand_symbols(text)
-    text = remove_unnecessary_symbols(text)
-    text = uppercase(text)
-    text = collapse_whitespace(text)
-    return text
-
-
-def tokenize_ZH(text: str) -> List[str]:
-    try:
-        text = number_to_chinese(text)
-        segs = list(jieba.cut(text))
-        full = lazy_pinyin(
-            segs,
-            style=Style.TONE3,
-            tone_sandhi=True,
-            neutral_tone_with_five=True,
-        )
-        phones = []
-        for x in full:
-            # valid pinyin (in tone3 style) is alphabet + 1 number in [1-5].
-            if not (x[0:-1].isalpha() and x[-1] in ("1", "2", "3", "4", "5")):
-                phones.append(x)
-                continue
-            initial = to_initials(x, strict=False)
-            # don't want to share tokens with espeak tokens, so use tone3 style
-            final = to_finals_tone3(
-                x, strict=False, neutral_tone_with_five=True
+    def fraction_to_words(self, numerator, denominator):
+        if numerator == 1 and denominator == 2:
+            return " one half "
+        if numerator == 1 and denominator == 4:
+            return " one quarter "
+        if denominator == 2:
+            return " " + self._inflect.number_to_words(numerator) + " halves "
+        if denominator == 4:
+            return (
+                " " + self._inflect.number_to_words(numerator) + " quarters "
             )
-            if initial != "":
-                # don't want to share tokens with espeak tokens, so add a '0' after each initial
-                phones.append(initial + "0")
-            if final != "":
-                phones.append(final)
-        return phones
-    except Exception as ex:
-        logging.warning(f"Tokenize ZH failed: {ex}")
-        return []
+        return (
+            " "
+            + self._inflect.number_to_words(numerator)
+            + " "
+            + self._inflect.ordinal(self._inflect.number_to_words(denominator))
+            + " "
+        )
+
+    def _remove_commas(self, m):
+        return m.group(1).replace(",", "")
+
+    def _expand_dollars(self, m):
+        match = m.group(1)
+        parts = match.split(".")
+        if len(parts) > 2:
+            return " " + match + " dollars "  # Unexpected format
+        dollars = int(parts[0]) if parts[0] else 0
+        cents = int(parts[1]) if len(parts) > 1 and parts[1] else 0
+        if dollars and cents:
+            dollar_unit = "dollar" if dollars == 1 else "dollars"
+            cent_unit = "cent" if cents == 1 else "cents"
+            return " %s %s, %s %s " % (dollars, dollar_unit, cents, cent_unit)
+        elif dollars:
+            dollar_unit = "dollar" if dollars == 1 else "dollars"
+            return " %s %s " % (dollars, dollar_unit)
+        elif cents:
+            cent_unit = "cent" if cents == 1 else "cents"
+            return " %s %s " % (cents, cent_unit)
+        else:
+            return " zero dollars "
+
+    def _expand_fraction(self, m):
+        numerator = int(m.group(1))
+        denominator = int(m.group(2))
+        return self.fraction_to_words(numerator, denominator)
+
+    def _expand_decimal_point(self, m):
+        return m.group(1).replace(".", " point ")
+
+    def _expand_percent(self, m):
+        return m.group(1).replace("%", " percent ")
+
+    def _expand_ordinal(self, m):
+        return " " + self._inflect.number_to_words(m.group(0)) + " "
+
+    def _expand_number(self, m):
+        num = int(m.group(0))
+        if num > 1000 and num < 3000:
+            if num == 2000:
+                return " two thousand "
+            elif num > 2000 and num < 2010:
+                return (
+                    " two thousand "
+                    + self._inflect.number_to_words(num % 100)
+                    + " "
+                )
+            elif num % 100 == 0:
+                return (
+                    " "
+                    + self._inflect.number_to_words(num // 100)
+                    + " hundred "
+                )
+            else:
+                return (
+                    " "
+                    + self._inflect.number_to_words(
+                        num, andword="", zero="oh", group=2
+                    ).replace(", ", " ")
+                    + " "
+                )
+        else:
+            return " " + self._inflect.number_to_words(num, andword="") + " "
+
+    def normalize_numbers(self, text):
+        text = re.sub(self._comma_number_re, self._remove_commas, text)
+        text = re.sub(self._pounds_re, r"\1 pounds", text)
+        text = re.sub(self._dollars_re, self._expand_dollars, text)
+        text = re.sub(self._fraction_re, self._expand_fraction, text)
+        text = re.sub(
+            self._decimal_number_re, self._expand_decimal_point, text
+        )
+        text = re.sub(self._percent_number_re, self._expand_percent, text)
+        text = re.sub(self._ordinal_re, self._expand_ordinal, text)
+        text = re.sub(self._number_re, self._expand_number, text)
+        return text
+
+    def expand_abbreviations(self, text):
+        for regex, replacement in self._abbreviations:
+            text = re.sub(regex, replacement, text)
+        return text
 
 
-def tokenize_EN(text: str) -> List[str]:
-    try:
-        text = expand_abbreviations(text)
-        text = normalize_numbers(text)
-        tokens = phonemize_espeak(text, "en-us")
-        tokens = reduce(lambda x, y: x + y, tokens)
-        return tokens
-    except Exception as ex:
-        logging.warning(f"Tokenize EN failed: {ex}")
-        return []
+class LibriTTSEnglishTextNormalizer(EnglishTextNormalizer):
+    """
+    A class to handle preprocessing of English text of LibriTTS dataset. Following:
+    https://github.com/espnet/espnet_tts_frontend/blob/master/tacotron_cleaner/cleaners.py
+    """
+
+    def normalize(self, text: str) -> str:
+        text = unidecode(text)
+        text = text.lower()
+        text = self.normalize_numbers(text)
+        text = self.expand_abbreviations(text)
+        text = self._expand_symbols(text)
+        text = self._remove_unnecessary_symbols(text)
+        text = text.upper()
+        text = re.sub(r"\s+", " ", text)
+
+        return text
+
+    def _expand_symbols(self, text: str) -> str:
+        text = re.sub(";", ",", text)
+        text = re.sub(":", ",", text)
+        text = re.sub("-", " ", text)
+        text = re.sub("&", "and", text)
+        return text
+
+    def _remove_unnecessary_symbols(self, text: str) -> str:
+        text = re.sub(r"[\(\)\[\]\<\>\"]+", "", text)
+        return text
 
 
-class TokenizerEmilia(object):
+class ChineseTextNormalizer(TextNormalizer):
+    """
+    A class to handle preprocessing of Chinese text including normalization.
+    """
+
+    def normalize(self, text: str) -> str:
+        """Normalize text."""
+        # Convert numbers to Chinese
+        text = cn2an.transform(text, "an2cn")
+        return text
+
+
+class Tokenizer(ABC):
+    """Abstract base class for tokenizers, defining common interface."""
+
+    @abstractmethod
+    def texts_to_token_ids(self, texts: List[str]) -> List[List[int]]:
+        """Convert list of texts to list of token id sequences."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def texts_to_tokens(self, texts: List[str]) -> List[List[str]]:
+        """Convert list of texts to list of token sequences."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def tokens_to_token_ids(self, tokens: List[List[str]]) -> List[List[int]]:
+        """Convert list of token sequences to list of token id sequences."""
+        raise NotImplementedError
+
+
+class EmiliaTokenizer(Tokenizer):
     def __init__(self, token_file: Optional[str] = None, token_type="phone"):
         """
         Args:
           tokens: the file that contains information that maps tokens to ids,
-            which is a text file with '{token} {token_id}' per line.
+            which is a text file with '{token}\t{token_id}' per line.
         """
         assert (
             token_type == "phone"
         ), f"Only support phone tokenizer for Emilia, but get {token_type}."
+
+        self.english_normalizer = EnglishTextNormalizer()
+        self.chinese_normalizer = ChineseTextNormalizer()
+
         self.has_tokens = False
         if token_file is None:
             logging.debug(
-                "Initialize Tokenizer without tokens file, will fail when map to ids."
+                "Initialize Tokenizer without tokens file, \
+                    will fail when map to ids."
             )
             return
         self.token2id: Dict[str, int] = {}
@@ -428,86 +308,286 @@ class TokenizerEmilia(object):
         self,
         texts: List[str],
     ) -> List[List[str]]:
-        """
-        Args:
-          texts:
-            A list of transcripts.
-        Returns:
-          Return a list of a list of tokens [utterance][token]
-        """
         for i in range(len(texts)):
             # Text normalization
-            texts[i] = preprocess(texts[i])
+            texts[i] = self.map_punctuations(texts[i])
 
         phoneme_list = []
         for text in texts:
             # now only en and ch
-            segments = get_segment(text)
+            segments = self.get_segment(text)
             all_phoneme = []
             for index in range(len(segments)):
                 seg = segments[index]
                 if seg[1] == "zh":
-                    phoneme = tokenize_ZH(seg[0])
+                    phoneme = self.tokenize_ZH(seg[0])
+                elif seg[1] == "en":
+                    phoneme = self.tokenize_EN(seg[0])
+                elif seg[1] == "pinyin":
+                    phoneme = self.tokenize_pinyin(seg[0])
+                elif seg[1] == "tag":
+                    phoneme = [seg[0]]
                 else:
-                    if seg[1] != "en":
-                        logging.debug(
-                            f"The lang should be en, given {seg[1]}, skipping segment : {seg}"
-                        )
-                        continue
-                    phoneme = tokenize_EN(seg[0])
+                    logging.warning(
+                        f"No English or Chinese characters found, \
+                            skipping segment of unknown language: {seg}"
+                    )
+                    continue
                 all_phoneme += phoneme
         phoneme_list.append(all_phoneme)
         return phoneme_list
 
     def tokens_to_token_ids(
         self,
-        tokens: List[List[str]],
-        intersperse_blank: bool = False,
+        tokens_list: List[List[str]],
     ) -> List[List[int]]:
-        """
-        Args:
-          tokens_list:
-            A list of token list, each corresponding to one utterance.
-          intersperse_blank:
-            Whether to intersperse blanks in the token sequence.
-
-        Returns:
-          Return a list of token id list [utterance][token_id]
-        """
         assert (
             self.has_tokens
         ), "Please initialize Tokenizer with a tokens file."
-        token_ids = []
+        token_ids_list = []
 
-        for tks in tokens:
-            ids = []
-            for t in tks:
+        for tokens in tokens_list:
+            token_ids = []
+            for t in tokens:
                 if t not in self.token2id:
                     logging.debug(f"Skip OOV {t}")
                     continue
-                ids.append(self.token2id[t])
+                token_ids.append(self.token2id[t])
 
-            if intersperse_blank:
-                ids = intersperse(ids, self.pad_id)
+            token_ids_list.append(token_ids)
 
-            token_ids.append(ids)
+        return token_ids_list
 
-        return token_ids
+    def tokenize_ZH(self, text: str) -> List[str]:
+        try:
+            text = self.chinese_normalizer.normalize(text)
+            segs = list(jieba.cut(text))
+            full = lazy_pinyin(
+                segs,
+                style=Style.TONE3,
+                tone_sandhi=True,
+                neutral_tone_with_five=True,
+            )
+            phones = []
+            for x in full:
+                # valid pinyin (in tone3 style) is alphabet + 1 number in [1-5].
+                if not (
+                    x[0:-1].isalpha() and x[-1] in ("1", "2", "3", "4", "5")
+                ):
+                    phones.append(x)
+                    continue
+                else:
+                    phones.extend(self.seperate_pinyin(x))
+            return phones
+        except Exception as ex:
+            logging.warning(f"Tokenization of Chinese texts failed: {ex}")
+            return []
+
+    def tokenize_EN(self, text: str) -> List[str]:
+        try:
+            text = self.english_normalizer.normalize(text)
+            tokens = phonemize_espeak(text, "en-us")
+            tokens = reduce(lambda x, y: x + y, tokens)
+            return tokens
+        except Exception as ex:
+            logging.warning(f"Tokenization of English texts failed: {ex}")
+            return []
+
+    def tokenize_pinyin(self, text: str) -> List[str]:
+        try:
+            assert text.startswith("<") and text.endswith(">")
+            text = text.lstrip("<").rstrip(">")
+            # valid pinyin (in tone3 style) is alphabet + 1 number in [1-5].
+            if not (
+                text[0:-1].isalpha() and text[-1] in ("1", "2", "3", "4", "5")
+            ):
+                logging.warning(
+                    f"Strings enclosed with <> should be pinyin, \
+                    but got: {text}. Skipped it. "
+                )
+                return []
+            else:
+                return self.seperate_pinyin(text)
+        except Exception as ex:
+            logging.warning(f"Tokenize pinyin failed: {ex}")
+            return []
+
+    def seperate_pinyin(self, text: str) -> List[str]:
+        """
+        Separate pinyin into initial and final
+        """
+        pinyins = []
+        initial = to_initials(text, strict=False)
+        # don't want to share tokens with espeak tokens,
+        # so use tone3 style
+        final = to_finals_tone3(
+            text,
+            strict=False,
+            neutral_tone_with_five=True,
+        )
+        if initial != "":
+            # don't want to share tokens with espeak tokens,
+            # so add a '0' after each initial
+            pinyins.append(initial + "0")
+        if final != "":
+            pinyins.append(final)
+        return pinyins
+
+    def map_punctuations(self, text):
+        text = text.replace("，", ",")
+        text = text.replace("。", ".")
+        text = text.replace("！", "!")
+        text = text.replace("？", "?")
+        text = text.replace("；", ";")
+        text = text.replace("：", ":")
+        text = text.replace("、", ",")
+        text = text.replace("‘", "'")
+        text = text.replace("“", '"')
+        text = text.replace("”", '"')
+        text = text.replace("’", "'")
+        text = text.replace("⋯", "…")
+        text = text.replace("···", "…")
+        text = text.replace("・・・", "…")
+        text = text.replace("...", "…")
+        return text
+
+    def get_segment(self, text: str) -> List[str]:
+        """
+        Split a text into segments based on language types
+        (Chinese, English, Pinyin, tags, etc.)
+
+        Args:
+            text (str): Input text to be segmented
+
+        Returns:
+            List[str]: Segmented text parts with their language types
+
+        Example:
+            Input: 我们是小米人,是吗? Yes I think so!霍...啦啦啦
+            Output: [('我们是小米人,是吗? ', 'zh'),
+                ('Yes I think so!', 'en'), ('霍...啦啦啦', 'zh')]
+        """
+        # Stores the final segmented parts and their language types
+        segments = []
+        # Stores the language type of each character in the input text
+        types = []
+        temp_seg = ""
+        temp_lang = ""
+
+        # Each part is a character, or a special string enclosed in <> and []
+        # <> denotes pinyin string, [] denotes other special strings.
+        _part_pattern = re.compile(r"[<[].*?[>\]]|.")
+        text = _part_pattern.findall(text)
+
+        for i, part in enumerate(text):
+            if self.is_chinese(part) or self.is_pinyin(part):
+                types.append("zh")
+            elif self.is_alphabet(part):
+                types.append("en")
+            else:
+                types.append("other")
+
+        assert len(types) == len(text)
+
+        for i in range(len(types)):
+            # find the first char of the seg
+            if i == 0:
+                temp_seg += text[i]
+                temp_lang = types[i]
+            else:
+                if temp_lang == "other":
+                    temp_seg += text[i]
+                    temp_lang = types[i]
+                else:
+                    if types[i] in [temp_lang, "other"]:
+                        temp_seg += text[i]
+                    else:
+                        segments.append((temp_seg, temp_lang))
+                        temp_seg = text[i]
+                        temp_lang = types[i]
+
+        segments.append((temp_seg, temp_lang))
+
+        # Handle "pinyin" and "tag" types
+        segments = self.split_segments(segments)
+        return segments
+
+    def split_segments(self, segments):
+        """
+        split segments into smaller parts if special strings enclosed by [] or <>
+        are found, where <> denotes pinyin strings, [] denotes other special strings.
+
+        Args:
+            segments (list): A list of tuples where each tuple contains:
+                - temp_seg (str): The text segment to be split.
+                - temp_lang (str): The language code associated with the segment.
+
+        Returns:
+            list: A list of smaller segments.
+        """
+        result = []
+        for temp_seg, temp_lang in segments:
+            parts = re.split(r"([<[].*?[>\]])", temp_seg)
+            for part in parts:
+                if not part:
+                    continue
+                if self.is_pinyin(part):
+                    result.append((part, "pinyin"))
+                elif self.is_tag(part):
+                    result.append((part, "tag"))
+                else:
+                    result.append((part, temp_lang))
+        return result
+
+    def is_chinese(self, char: str) -> bool:
+        if char >= "\u4e00" and char <= "\u9fa5":
+            return True
+        else:
+            return False
+
+    def is_alphabet(self, char: str) -> bool:
+        if (char >= "\u0041" and char <= "\u005a") or (
+            char >= "\u0061" and char <= "\u007a"
+        ):
+            return True
+        else:
+            return False
+
+    def is_pinyin(self, part: str) -> bool:
+        if part.startswith("<") and part.endswith(">"):
+            return True
+        else:
+            return False
+
+    def is_tag(self, part: str) -> bool:
+        if part.startswith("[") and part.endswith("]"):
+            return True
+        else:
+            return False
 
 
-class TokenizerLibriTTS(object):
-    def __init__(self, token_file: str, token_type: str):
+class LibriTTSTokenizer(Tokenizer):
+    def __init__(self, token_file: Optional[str] = None, token_type="char"):
         """
         Args:
           type: the type of tokenizer, e.g., bpe, char, phone.
           tokens: the file that contains information that maps tokens to ids,
-            which is a text file with '{token} {token_id}' per line if type is
+            which is a text file with '{token}\t{token_id}' per line if type is
             char or phone, otherwise it is a bpe_model file.
         """
         self.type = token_type
         assert token_type in ["bpe", "char", "phone"]
         # Parse token file
 
+        self.normalizer = LibriTTSEnglishTextNormalizer()
+
+        self.has_tokens = False
+        if token_file is None:
+            logging.debug(
+                "Initialize Tokenizer without tokens file, \
+                will fail when map to ids."
+            )
+            return
         if token_type == "bpe":
             import sentencepiece as spm
 
@@ -525,73 +605,50 @@ class TokenizerLibriTTS(object):
                     self.token2id[token] = id
             self.pad_id = self.token2id["_"]  # padding
             self.vocab_size = len(self.token2id)
+        self.has_tokens = True
 
     def texts_to_token_ids(
         self,
         texts: List[str],
-        lang: str = "en-us",
     ) -> List[List[int]]:
-        """
-        Args:
-          texts:
-            A list of transcripts.
-          intersperse_blank:
-            Whether to intersperse blanks in the token sequence.
-            Used when alignment is from MAS.
-          lang:
-            Language argument passed to phonemize_espeak().
-
-        Returns:
-          Return a list of token id list [utterance][token_id]
-        """
-        for i in range(len(texts)):
-            # Text normalization
-            texts[i] = custom_english_cleaners(texts[i])
-
         if self.type == "bpe":
-            token_ids_list = self.sp.encode(texts)
-
-        elif self.type == "phone":
-            token_ids_list = []
-            for text in texts:
-                tokens_list = phonemize_espeak(text.lower(), lang)
-                tokens = []
-                for t in tokens_list:
-                    tokens.extend(t)
-                token_ids = []
-                for t in tokens:
-                    if t not in self.token2id:
-                        logging.debug(f"Skip OOV {t}")
-                        continue
-                    token_ids.append(self.token2id[t])
-
-                token_ids_list.append(token_ids)
+            for i in range(len(texts)):
+                texts[i] = self.normalizer.normalize(texts[i])
+            return self.sp.encode(texts)
         else:
-            token_ids_list = []
-            for text in texts:
-                token_ids = []
-                for t in text:
-                    if t not in self.token2id:
-                        logging.debug(f"Skip OOV {t}")
-                        continue
-                    token_ids.append(self.token2id[t])
+            return self.tokens_to_token_ids(self.texts_to_tokens(texts))
 
-                token_ids_list.append(token_ids)
+    def texts_to_tokens(
+        self,
+        texts: List[str],
+    ) -> List[List[str]]:
+        for i in range(len(texts)):
+            texts[i] = self.normalizer.normalize(texts[i])
 
-        return token_ids_list
+        if self.type == "char":
+            tokens_list = [list(texts[i]) for i in range(len(texts))]
+        elif self.type == "phone":
+            tokens_list = [
+                phonemize_espeak(texts[i].lower(), "en-us")
+                for i in range(len(texts))
+            ]
+        elif self.type == "bpe":
+            tokens_list = self.sp.encode(texts, out_type=str)
+
+        return tokens_list
 
     def tokens_to_token_ids(
         self,
-        tokens_list: List[str],
+        tokens_list: List[List[str]],
     ) -> List[List[int]]:
-        """
-        Args:
-          tokens_list:
-            A list of token list, each corresponding to one utterance.
+        assert (
+            self.has_tokens
+        ), "Please initialize Tokenizer with a tokens file."
 
-        Returns:
-          Return a list of token id list [utterance][token_id]
-        """
+        assert (
+            self.type != "bpe"
+        ), "BPE tokenizer does not support this function."
+
         token_ids_list = []
 
         for tokens in tokens_list:
@@ -608,11 +665,11 @@ class TokenizerLibriTTS(object):
 
 
 if __name__ == "__main__":
-    text = "我们是5年小米人,是吗? Yes I think so! mr king, 5 years, from 2019 to 2024. 霍...啦啦啦超过90%的人咯...?!9204"
-    tokenizer = TokenizerEmilia()
+    text = (
+        "我们是5年小米人,是吗? Yes I think so! "
+        "mr king, 5 years, from 2019 to 2024."
+        "霍...啦啦啦超过90%的人<le5>...?!9204"
+    )
+    tokenizer = EmiliaTokenizer()
     tokens = tokenizer.texts_to_tokens([text])
-    print(f"tokens : {tokens}")
-    tokens2 = "|".join(tokens[0])
-    print(f"tokens2 : {tokens2}")
-    tokens2 = tokens2.split("|")
-    assert tokens[0] == tokens2
+    print(f"tokens: {'|'.join(tokens[0])}")

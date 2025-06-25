@@ -45,10 +45,13 @@ from pathlib import Path
 
 import torch
 from model import get_distill_model, get_model
-from tokenizer import TokenizerEmilia, TokenizerLibriTTS
+from tokenizer import EmiliaTokenizer, LibriTTSTokenizer
 from train_flow import add_model_arguments, get_params
 
-from checkpoint import average_checkpoints_with_averaged_model, find_checkpoints
+from checkpoint import (
+    average_checkpoints_with_averaged_model,
+    find_checkpoints,
+)
 from utils import str2bool
 
 
@@ -122,11 +125,11 @@ def main():
     params.update(vars(args))
 
     if params.dataset == "emilia":
-        tokenizer = TokenizerEmilia(
+        tokenizer = EmiliaTokenizer(
             token_file=params.token_file, token_type=params.token_type
         )
     elif params.dataset == "libritts":
-        tokenizer = TokenizerLibriTTS(
+        tokenizer = LibriTTSTokenizer(
             token_file=params.token_file, token_type=params.token_type
         )
 

@@ -63,7 +63,7 @@ from feature import TorchAudioFbank, TorchAudioFbankConfig
 from huggingface_hub import hf_hub_download
 from lhotse.utils import fix_random_seed
 from model import get_distill_model, get_model
-from tokenizer import TokenizerEmilia
+from tokenizer import EmiliaTokenizer
 from utils import AttributeDict
 from vocos import Vocos
 
@@ -221,7 +221,7 @@ def generate_sentence(
     text: str,
     model: torch.nn.Module,
     vocoder: torch.nn.Module,
-    tokenizer: TokenizerEmilia,
+    tokenizer: EmiliaTokenizer,
     feature_extractor: TorchAudioFbank,
     device: torch.device,
     num_step: int = 16,
@@ -243,7 +243,7 @@ def generate_sentence(
         text (str): Text to be synthesized into a waveform.
         model (torch.nn.Module): The model used for generation.
         vocoder (torch.nn.Module): The vocoder used to convert features to waveforms.
-        tokenizer (TokenizerEmilia): The tokenizer used to convert text to tokens.
+        tokenizer (EmiliaTokenizer): The tokenizer used to convert text to tokens.
         feature_extractor (TorchAudioFbank): The feature extractor used to
             extract acoustic features.
         device (torch.device): The device on which computations are performed.
@@ -347,7 +347,7 @@ def generate(
     test_list: str,
     model: torch.nn.Module,
     vocoder: torch.nn.Module,
-    tokenizer: TokenizerEmilia,
+    tokenizer: EmiliaTokenizer,
     feature_extractor: TorchAudioFbank,
     device: torch.device,
     num_step: int = 16,
@@ -455,7 +455,7 @@ def main():
         "zhu-han/ZipVoice", filename="tokens_emilia.txt"
     )
 
-    tokenizer = TokenizerEmilia(token_file)
+    tokenizer = EmiliaTokenizer(token_file)
 
     params.vocab_size = tokenizer.vocab_size
     params.pad_id = tokenizer.pad_id

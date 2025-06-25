@@ -86,11 +86,14 @@ from checkpoint import load_checkpoint
 from feature import TorchAudioFbank, TorchAudioFbankConfig
 from lhotse.utils import fix_random_seed
 from model import get_distill_model, get_model
-from tokenizer import TokenizerEmilia, TokenizerLibriTTS
+from tokenizer import EmiliaTokenizer, LibriTTSTokenizer
 from train_flow import add_model_arguments, get_params
 from vocos import Vocos
 
-from checkpoint import average_checkpoints_with_averaged_model, find_checkpoints
+from checkpoint import (
+    average_checkpoints_with_averaged_model,
+    find_checkpoints,
+)
 from utils import AttributeDict, setup_logger, str2bool
 
 
@@ -257,7 +260,7 @@ def generate_sentence(
     text: str,
     model: nn.Module,
     vocoder: nn.Module,
-    tokenizer: TokenizerEmilia,
+    tokenizer: EmiliaTokenizer,
     feature_extractor: TorchAudioFbank,
     device: torch.device,
     num_step: int = 16,
@@ -279,7 +282,7 @@ def generate_sentence(
         text (str): Text to be synthesized into a waveform.
         model (nn.Module): The model used for generation.
         vocoder (nn.Module): The vocoder used to convert features to waveforms.
-        tokenizer (TokenizerEmilia): The tokenizer used to convert text to tokens.
+        tokenizer (EmiliaTokenizer): The tokenizer used to convert text to tokens.
         feature_extractor (TorchAudioFbank): The feature extractor used to
             extract acoustic features.
         device (torch.device): The device on which computations are performed.
@@ -381,7 +384,7 @@ def generate(
     params: AttributeDict,
     model: nn.Module,
     vocoder: nn.Module,
-    tokenizer: TokenizerEmilia,
+    tokenizer: EmiliaTokenizer,
 ):
     total_t = []
     total_t_no_vocoder = []
@@ -470,11 +473,11 @@ def main():
     logging.info(f"Device: {params.device}")
 
     if params.dataset == "emilia":
-        tokenizer = TokenizerEmilia(
+        tokenizer = EmiliaTokenizer(
             token_file=params.token_file, token_type=params.token_type
         )
     elif params.dataset == "libritts":
-        tokenizer = TokenizerLibriTTS(
+        tokenizer = LibriTTSTokenizer(
             token_file=params.token_file, token_type=params.token_type
         )
 

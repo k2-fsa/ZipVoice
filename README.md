@@ -69,6 +69,7 @@ Users in China mainland can refer to https://k2-fsa.org/zh-CN/get-started/k2/.
 To generate speech with our pre-trained ZipVoice or ZipVoice-Distill models, use the following commands (Required models will be downloaded from HuggingFace):
 
 ### 1. Inference of a single sentence:
+
 ```bash
 python3 zipvoice/zipvoice_infer.py \
     --model-name "zipvoice" \
@@ -81,6 +82,7 @@ python3 zipvoice/zipvoice_infer.py \
 - `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
 
 ### 2. Inference of a list of sentences:
+
 ```bash
 python3 zipvoice/zipvoice_infer.py \
     --model-name "zipvoice" \
@@ -90,12 +92,23 @@ python3 zipvoice/zipvoice_infer.py \
 
 - Each line of `test.tsv` is in the format of `{wav_name}\t{prompt_transcription}\t{prompt_wav}\t{text}`.
 
-
 > **Note:** If you have trouble connecting to HuggingFace, try:
 > ```bash
-> export HF_ENDPOINT=https://hf-mirror.co
+> export HF_ENDPOINT=https://hf-mirror.com
 > ```
 
+### 3. Correcting mispronounced chinese polyphone characters
+
+We use [pypinyin](https://github.com/mozillazg/python-pinyin) to convert Chinese characters to pinyin. However, it can occasionally mispronounce **polyphone characters** (多音字).
+
+To manually correct these mispronunciations, enclose the **corrected pinyin** in angle brackets `< >` and include the **tone mark**.
+
+**Example:**
+
+- Original text: `这把剑长三十公分`
+- Correct the pinyin of `长`:  `这把剑<chang2>三十公分`
+
+> **Note:** If you want to manually assign multiple pinyins, enclose each pinyin with `<>`, e.g., `这把<jian4><chang2><san1>十公分`
 
 ## Training Your Own Model
 
