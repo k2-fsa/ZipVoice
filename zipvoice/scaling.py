@@ -27,7 +27,7 @@ try:
 except Exception as ex:
     logging.warning(
         "k2 is not installed correctly. Swoosh functions will fallback to "
-        "pytorch implementation."
+        "PyTorch implementation, leading to slower speed and higher memory consumption."
     )
 import torch
 import torch.nn as nn

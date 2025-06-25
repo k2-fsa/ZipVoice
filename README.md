@@ -1,15 +1,19 @@
-## ZipVoice: Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching
+<div align="center">
+
+# ZipVoice⚡
+## Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching
 
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-COLOR.svg)](http://arxiv.org/abs/2506.13053)
 [![demo](https://img.shields.io/badge/GitHub-Demo%20page-orange.svg)](https://zipvoice.github.io/)
+</div>
 
 
 ## Overview
 ZipVoice is a high-quality zero-shot TTS model with a small model size and fast inference speed.
 
 
-### Key features:
+### 1. Key features:
 
 - Small and fast: only 123M parameters.
 
@@ -17,11 +21,11 @@ ZipVoice is a high-quality zero-shot TTS model with a small model size and fast 
 
 - Multi-lingual: support Chinese and English.
 
-### Architecture
+### 2. Architecture
 
-![](https://zipvoice.github.io/pics/zipvoice.png)
-
-
+<div align="center">
+<img src="https://zipvoice.github.io/pics/zipvoice.png" width="700" >
+</div>
 
 ## News
 **2025/06/16**: 🔥 ZipVoice is released.
@@ -29,25 +33,36 @@ ZipVoice is a high-quality zero-shot TTS model with a small model size and fast 
 
 ## Installation
 
-* Clone icefall repository and change to zipvoice directory:
+### 1. Clone the ZipVoice repository:
 
 ```bash
-git clone https://github.com/k2-fsa/icefall.git
-cd icefall/egs/zipvoice
+git clone https://github.com/k2-fsa/ZipVoice.git
 ```
 
-* Create a Python virtual environment (optional but recommended):
+### 2. (Optional) Create a Python virtual environment:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv zipvoice
+source zipvoice/bin/activate
 ```
 
-* Install the required packages:
+### 3. Install the required packages:
 
 ```bash
 pip install -r requirements.txt
 ```
+
+### 4. (Optional) Install k2 for training or efficient inference:
+
+k2 is necessary for training and can speed up inference. Nevertheless, you can still use the inference mode of ZipVoice without installing k2.
+
+> **Note:**  Make sure to install the k2 version that matches your PyTorch and CUDA version. For example, if you are using pytorch 2.5.1 and CUDA 12.1, you can install k2 as follows:
+```bash
+pip install k2==1.24.4.dev20250208+cuda12.1.torch2.5.1 -f https://k2-fsa.github.io/k2/cuda.html
+```
+
+Please refer to https://k2-fsa.org/get-started/k2/ for details.
+Users in China mainland can refer to https://k2-fsa.org/zh-CN/get-started/k2/.
 
 ## Usage
 
@@ -63,6 +78,8 @@ python3 zipvoice/zipvoice_infer.py \
     --res-wav-path result.wav
 ```
 
+- `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
+
 ### 2. Inference of a list of sentences:
 ```bash
 python3 zipvoice/zipvoice_infer.py \
@@ -71,33 +88,18 @@ python3 zipvoice/zipvoice_infer.py \
     --res-dir results/test
 ```
 
-- `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
 - Each line of `test.tsv` is in the format of `{wav_name}\t{prompt_transcription}\t{prompt_wav}\t{text}`.
 
 
-> **Note:**  If you having trouble connecting to HuggingFace, try:
-```bash
-export HF_ENDPOINT=https://hf-mirror.com
-```
+> **Note:** If you have trouble connecting to HuggingFace, try:
+> ```bash
+> export HF_ENDPOINT=https://hf-mirror.co
+> ```
+
 
 ## Training Your Own Model
 
 The following steps show how to train a model from scratch on Emilia and LibriTTS datasets, respectively.
-
-### 0. Install dependencies for training
-
-For now, zipvoice requires k2 for more memory efficient training.
-
-```bash
-# Install k2.
-# Please refer to https://k2-fsa.org/get-started/k2/ for details.
-# For users in China mainland, please refer to https://k2-fsa.org/zh-CN/get-started/k2/
-
-# Note: Make sure you have installed the correct version of PyTorch and k2 that matches your CUDA version.
-# For example, if you are using pytorch 2.5.1 and CUDA 12.1, you can install k2 as follows:
-
-pip install k2==1.24.4.dev20250208+cuda12.1.torch2.5.1 -f https://k2-fsa.github.io/k2/cuda.html
-```
 
 ### 1. Data Preparation
 
@@ -413,10 +415,10 @@ You can also scan the QR code to join our wechat group or follow our wechat offi
 ## Citation
 
 ```bibtex
-@article{zhu-2025-zipvoice,
+@article{zhu2025zipvoice,
       title={ZipVoice: Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching},
-      author={Han Zhu and Wei Kang and Zengwei Yao and Liyong Guo and Fangjun Kuang and Zhaoqing Li and Weiji Zhuang and Long Lin and Daniel Povey}
+      author={Zhu, Han and Kang, Wei and Yao, Zengwei and Guo, Liyong and Kuang, Fangjun and Li, Zhaoqing and Zhuang, Weiji and Lin, Long and Povey, Daniel},
       journal={arXiv preprint arXiv:2506.13053},
-      year={2025},
+      year={2025}
 }
 ```
