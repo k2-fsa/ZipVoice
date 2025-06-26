@@ -80,6 +80,7 @@ python3 zipvoice/zipvoice_infer.py \
 ```
 
 - `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
+- If `<>` or `[]` appear in the text, strings enclosed by them will be treated as special tokens. `<>` denotes Chinese pinyin and `[]` denotes other special tags.
 
 ### 2. Inference of a list of sentences:
 
