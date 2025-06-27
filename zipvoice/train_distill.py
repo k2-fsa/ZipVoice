@@ -61,7 +61,7 @@ import random
 from functools import partial
 from pathlib import Path
 from shutil import copyfile
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import diagnostics
 import optim
@@ -70,13 +70,12 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 from checkpoint import (
     load_checkpoint,
-    save_checkpoint,
     remove_checkpoints,
     resume_checkpoint,
+    save_checkpoint,
     save_checkpoint_with_global_batch_idx,
     update_averaged_model,
 )
-
 from hooks import register_inf_check_hooks
 from lhotse.cut import Cut, CutSet
 from lhotse.utils import fix_random_seed
@@ -95,9 +94,9 @@ from utils import (
     MetricsTracker,
     cleanup_dist,
     condition_time_mask,
-    make_pad_mask,
     get_adjusted_batch_count,
     get_parameter_groups_with_lrs,
+    make_pad_mask,
     prepare_input,
     set_batch_count,
     setup_dist,
@@ -105,10 +104,7 @@ from utils import (
     str2bool,
 )
 
-
-LRSchedulerType = Union[
-    torch.optim.lr_scheduler._LRScheduler, optim.LRScheduler
-]
+LRSchedulerType = Union[torch.optim.lr_scheduler._LRScheduler, optim.LRScheduler]
 
 
 def get_parser():
@@ -185,8 +181,8 @@ def get_parser():
         "--ref-duration",
         type=float,
         default=50,
-        help="Reference batch duration for purposes of adjusting batch counts for setting various "
-        "schedules inside the model",
+        help="Reference batch duration for purposes of adjusting batch counts for "
+        "setting various schedules inside the model",
     )
 
     parser.add_argument(
@@ -296,8 +292,7 @@ def ema(new_model, ema_model, decay):
     ema_model_dict = ema_model.state_dict()
     for key in new_model_dict.keys():
         ema_model_dict[key].data.copy_(
-            ema_model_dict[key].data * decay
-            + new_model_dict[key].data * (1 - decay)
+            ema_model_dict[key].data * decay + new_model_dict[key].data * (1 - decay)
         )
 
 
@@ -334,11 +329,7 @@ def compute_fbank_loss(
         disables autograd.
     """
 
-    device = (
-        model.device
-        if isinstance(model, DDP)
-        else next(model.parameters()).device
-    )
+    device = model.device if isinstance(model, DDP) else next(model.parameters()).device
 
     batch_size, num_frames, _ = features.shape
 
@@ -431,9 +422,7 @@ def compute_fbank_loss(
         )
         pred_v = (pred_x1 - xt) / (t_dest - t)
 
-        padding_mask = make_pad_mask(
-            features_lens, max_len=num_frames
-        )  # (B, T)
+        padding_mask = make_pad_mask(features_lens, max_len=num_frames)  # (B, T)
         loss_mask = speech_condition_mask & (~padding_mask)
 
         target_v = (target_x1 - xt) / (t_dest - t)
@@ -499,11 +488,7 @@ def train_one_epoch(
         be set to 0.
     """
     model.train()
-    device = (
-        model.device
-        if isinstance(model, DDP)
-        else next(model.parameters()).device
-    )
+    device = model.device if isinstance(model, DDP) else next(model.parameters()).device
 
     # used to track the stats over iterations in one epoch
     tot_loss = MetricsTracker()
@@ -549,7 +534,8 @@ def train_one_epoch(
             model.train()
             logging.info(f"Epoch {params.cur_epoch}, validation: {valid_info}")
             logging.info(
-                f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated()//1000000}MB"
+                f"Maximum memory allocated so far is "
+                f"{torch.cuda.max_memory_allocated() // 1000000}MB"
             )
             if tb_writer is not None:
                 valid_info.write_summary(
@@ -649,9 +635,9 @@ def train_one_epoch(
         ):
             break
         if params.batch_idx_train % 100 == 0 and params.use_fp16:
-            # If the grad scale was less than 1, try increasing it.    The _growth_interval
-            # of the grad scaler is configurable, but we can't configure it to have different
-            # behavior depending on the current grad scale.
+            # If the grad scale was less than 1, try increasing it. The _growth_interval
+            # of the grad scaler is configurable, but we can't configure it to have
+            # different behavior depending on the current grad scale.
             cur_grad_scale = scaler._scale.item()
 
             if cur_grad_scale < 1024.0 or (
@@ -675,14 +661,11 @@ def train_one_epoch(
 
             logging.info(
                 f"Epoch {params.cur_epoch}, batch {batch_idx}, "
-                f"global_batch_idx: {params.batch_idx_train}, batch size: {batch_size}, "
+                f"global_batch_idx: {params.batch_idx_train}, "
+                f"batch size: {batch_size}, "
                 f"loss[{loss_info}], tot_loss[{tot_loss}], "
                 f"cur_lr: {cur_lr:.2e}, "
-                + (
-                    f"grad_scale: {scaler._scale.item()}"
-                    if params.use_fp16
-                    else ""
-                )
+                + (f"grad_scale: {scaler._scale.item()}" if params.use_fp16 else "")
             )
 
             if tb_writer is not None:
@@ -692,9 +675,7 @@ def train_one_epoch(
                 loss_info.write_summary(
                     tb_writer, "train/current_", params.batch_idx_train
                 )
-                tot_loss.write_summary(
-                    tb_writer, "train/tot_", params.batch_idx_train
-                )
+                tot_loss.write_summary(tb_writer, "train/tot_", params.batch_idx_train)
                 if params.use_fp16:
                     tb_writer.add_scalar(
                         "train/grad_scale",
@@ -719,11 +700,7 @@ def compute_validation_loss(
     """Run the validation process."""
 
     model.eval()
-    device = (
-        model.device
-        if isinstance(model, DDP)
-        else next(model.parameters()).device
-    )
+    device = model.device if isinstance(model, DDP) else next(model.parameters()).device
 
     # used to summary the stats over iterations
     tot_loss = MetricsTracker()

@@ -57,11 +57,10 @@ def get_pinyin_tokens(pinyin: Path) -> List[str]:
             x = line.strip()
             initial = to_initials(x, strict=False)
             # don't want to share tokens with espeak tokens, so use tone3 style
-            finals = to_finals_tone3(
-                x, strict=False, neutral_tone_with_five=True
-            )
+            finals = to_finals_tone3(x, strict=False, neutral_tone_with_five=True)
             if initial != "":
-                # don't want to share tokens with espeak tokens, so add a '0' after each initial
+                # don't want to share tokens with espeak tokens,
+                # so add a '0' after each initial
                 phones.add(initial + "0")
             if finals != "":
                 phones.add(finals)
@@ -85,9 +84,7 @@ def get_token2id(args):
 
 
 if __name__ == "__main__":
-    formatter = (
-        "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-    )
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
     logging.basicConfig(format=formatter, level=logging.INFO)
 
     args = get_args()

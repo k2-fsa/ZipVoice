@@ -55,9 +55,7 @@ def prepare_tokens(manifest_file, token_file):
     if "_" in unique_chars:
         unique_chars.remove("_")
 
-    sorted_chars = sorted(
-        unique_chars, key=lambda char: counter[char], reverse=True
-    )
+    sorted_chars = sorted(unique_chars, key=lambda char: counter[char], reverse=True)
 
     result = ["_"] + sorted_chars
 

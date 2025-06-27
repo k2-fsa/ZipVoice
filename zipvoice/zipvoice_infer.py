@@ -58,7 +58,6 @@ import numpy as np
 import safetensors.torch
 import torch
 import torchaudio
-
 from feature import TorchAudioFbank, TorchAudioFbankConfig
 from huggingface_hub import hf_hub_download
 from lhotse.utils import fix_random_seed
@@ -284,9 +283,7 @@ def generate_sentence(
     ).to(device)
 
     prompt_features = prompt_features.unsqueeze(0) * feat_scale
-    prompt_features_lens = torch.tensor(
-        [prompt_features.size(1)], device=device
-    )
+    prompt_features_lens = torch.tensor([prompt_features.size(1)], device=device)
 
     # Start timing
     start_t = dt.datetime.now()
@@ -393,14 +390,14 @@ def generate(
         total_t_vocoder.append(metrics["t_vocoder"])
         total_wav_seconds.append(metrics["wav_seconds"])
 
-    print(f"Average RTF: {np.sum(total_t)/np.sum(total_wav_seconds):.4f}")
+    print(f"Average RTF: {np.sum(total_t) / np.sum(total_wav_seconds):.4f}")
     print(
         f"Average RTF w/o vocoder: "
-        f"{np.sum(total_t_no_vocoder)/np.sum(total_wav_seconds):.4f}"
+        f"{np.sum(total_t_no_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
     print(
         f"Average RTF vocoder: "
-        f"{np.sum(total_t_vocoder)/np.sum(total_wav_seconds):.4f}"
+        f"{np.sum(total_t_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
 
 
@@ -451,9 +448,7 @@ def main():
         for key, value in model_config["feature"].items():
             setattr(params, key, value)
 
-    token_file = hf_hub_download(
-        "zhu-han/ZipVoice", filename="tokens_emilia.txt"
-    )
+    token_file = hf_hub_download("zhu-han/ZipVoice", filename="tokens_emilia.txt")
 
     tokenizer = EmiliaTokenizer(token_file)
 

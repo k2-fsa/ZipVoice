@@ -52,12 +52,17 @@ class DiffusionModel(torch.nn.Module):
         """
         Forward function that Handles the classifier-free guidance.
         Args:
-            t: The current timestep, a tensor of shape (batch, 1, 1) or a tensor of a single float.
+            t: The current timestep, a tensor of shape (batch, 1, 1) or a tensor of a
+                single float.
             x: The initial value, with the shape (batch, seq_len, emb_dim).
-            text_condition: The text_condition of the diffision model, with the shape (batch, seq_len, emb_dim).
-            speech_condition: The speech_condition of the diffision model, with the shape (batch, seq_len, emb_dim).
-            padding_mask: The mask for padding; True means masked position, with the shape (batch, seq_len).
-            guidance_scale: The scale of classifier-free guidance, a float or a tensor of shape (batch, 1, 1).
+            text_condition: The text_condition of the diffision model, with
+                the shape (batch, seq_len, emb_dim).
+            speech_condition: The speech_condition of the diffision model, with the
+                shape (batch, seq_len, emb_dim).
+            padding_mask: The mask for padding; True means masked position, with the
+                shape (batch, seq_len).
+            guidance_scale: The scale of classifier-free guidance, a float or a tensor
+                of shape (batch, 1, 1).
         Retrun:
             The prediction with the shape (batch, seq_len, emb_dim).
         """
@@ -162,10 +167,14 @@ class EulerSolver:
         """
         Compute the sample at time `t_end` by Euler Solver.
         Args:
-            x: The initial value at time `t_start`, with the shape (batch, seq_len, emb_dim).
-            text_condition: The text condition of the diffision mode, with the shape (batch, seq_len, emb_dim).
-            speech_condition: The speech condition of the diffision model, with the shape (batch, seq_len, emb_dim).
-            padding_mask: The mask for padding; True means masked position, with the shape (batch, seq_len).
+            x: The initial value at time `t_start`, with the shape (batch, seq_len,
+                emb_dim).
+            text_condition: The text condition of the diffision mode, with the
+                shape (batch, seq_len, emb_dim).
+            speech_condition: The speech condition of the diffision model, with the
+                shape (batch, seq_len, emb_dim).
+            padding_mask: The mask for padding; True means masked position, with the
+                shape (batch, seq_len).
             num_step: The number of ODE steps.
             guidance_scale: The scale for classifier-free guidance, which is
                 a float or a tensor with the shape (batch, 1, 1).
@@ -250,8 +259,10 @@ def get_time_steps_batch(
     """Compute the intermediate time steps for sampling in the batch mode.
 
     Args:
-        t_start: The starting time of the sampling (default is 0), with the shape (batch, 1, 1).
-        t_end: The starting time of the sampling (default is 1), with the shape (batch, 1, 1).
+        t_start: The starting time of the sampling (default is 0), with the shape
+            (batch, 1, 1).
+        t_end: The starting time of the sampling (default is 1), with the shape
+            (batch, 1, 1).
         num_step: The number of sampling.
         t_shift: shift the t toward smaller numbers so that the sampling
             will emphasize low SNR region. Should be in the range of (0, 1].

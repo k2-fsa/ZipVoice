@@ -68,9 +68,7 @@ def get_distill_model(params: AttributeDict) -> nn.Module:
     return model
 
 
-def get_fm_decoder_model(
-    params: AttributeDict, distill: bool = False
-) -> nn.Module:
+def get_fm_decoder_model(params: AttributeDict, distill: bool = False) -> nn.Module:
     """Get the Zipformer-based FM decoder model."""
 
     encoder = TTSZipformer(
@@ -101,9 +99,7 @@ def get_text_encoder_model(params: AttributeDict) -> nn.Module:
     encoder = TTSZipformer(
         in_dim=params.text_embed_dim,
         out_dim=params.feat_dim,
-        downsampling_factor=to_int_tuple(
-            params.text_encoder_downsampling_factor
-        ),
+        downsampling_factor=to_int_tuple(params.text_encoder_downsampling_factor),
         num_encoder_layers=to_int_tuple(params.text_encoder_num_layers),
         cnn_module_kernel=to_int_tuple(params.text_encoder_cnn_module_kernel),
         encoder_dim=params.text_encoder_dim,
@@ -218,20 +214,14 @@ class TtsModel(nn.Module):
             tokens_lens: the length of each token sequence, shape (batch,).
         """
         device = (
-            self.device
-            if isinstance(self, DDP)
-            else next(self.parameters()).device
+            self.device if isinstance(self, DDP) else next(self.parameters()).device
         )
-        tokens_padded = pad_labels(
-            tokens, pad_id=self.pad_id, device=device
-        )  # (B, S)
+        tokens_padded = pad_labels(tokens, pad_id=self.pad_id, device=device)  # (B, S)
         embed = self.embed(tokens_padded)  # (B, S, C)
         tokens_lens = torch.tensor(
             [len(token) for token in tokens], dtype=torch.int64, device=device
         )
-        tokens_padding_mask = make_pad_mask(
-            tokens_lens, embed.shape[1]
-        )  # (B, S)
+        tokens_padding_mask = make_pad_mask(tokens_lens, embed.shape[1])  # (B, S)
 
         embed = self.text_encoder(
             x=embed, t=None, padding_mask=tokens_padding_mask
@@ -260,13 +250,9 @@ class TtsModel(nn.Module):
 
         num_frames = int(features_lens.max())
 
-        padding_mask = make_pad_mask(
-            features_lens, max_len=num_frames
-        )  # (B, T)
+        padding_mask = make_pad_mask(features_lens, max_len=num_frames)  # (B, T)
 
-        tokens_durations = prepare_avg_tokens_durations(
-            features_lens, tokens_lens
-        )
+        tokens_durations = prepare_avg_tokens_durations(features_lens, tokens_lens)
 
         tokens_index = get_tokens_index(tokens_durations, num_frames).to(
             embed.device
@@ -309,8 +295,7 @@ class TtsModel(nn.Module):
         Process text for inference, given text tokens, real feature lengths and prompts.
         """
         tokens = [
-            prompt_token + token
-            for prompt_token, token in zip(prompt_tokens, tokens)
+            prompt_token + token for prompt_token, token in zip(prompt_tokens, tokens)
         ]
         features_lens = prompt_features_lens + features_lens
         embed, tokens_lens = self.forward_text_embed(tokens)
@@ -331,14 +316,11 @@ class TtsModel(nn.Module):
         feature lengths are predicted with the ratio of token numbers.
         """
         device = (
-            self.device
-            if isinstance(self, DDP)
-            else next(self.parameters()).device
+            self.device if isinstance(self, DDP) else next(self.parameters()).device
         )
 
         cat_tokens = [
-            prompt_token + token
-            for prompt_token, token in zip(prompt_tokens, tokens)
+            prompt_token + token for prompt_token, token in zip(prompt_tokens, tokens)
         ]
 
         prompt_tokens_lens = torch.tensor(
@@ -350,12 +332,7 @@ class TtsModel(nn.Module):
         cat_embed, cat_tokens_lens = self.forward_text_embed(cat_tokens)
 
         features_lens = torch.ceil(
-            (
-                prompt_features_lens
-                / prompt_tokens_lens
-                * cat_tokens_lens
-                / speed
-            )
+            (prompt_features_lens / prompt_tokens_lens * cat_tokens_lens / speed)
         ).to(dtype=torch.int64)
 
         text_condition, padding_mask = self.forward_text_condition(
@@ -394,15 +371,11 @@ class TtsModel(nn.Module):
             mask_percent=(0.7, 1.0),
             max_len=features.size(1),
         )
-        speech_condition = torch.where(
-            speech_condition_mask.unsqueeze(-1), 0, features
-        )
+        speech_condition = torch.where(speech_condition_mask.unsqueeze(-1), 0, features)
 
         if condition_drop_ratio > 0.0:
             drop_mask = (
-                torch.rand(text_condition.size(0), 1, 1).to(
-                    text_condition.device
-                )
+                torch.rand(text_condition.size(0), 1, 1).to(text_condition.device)
                 > condition_drop_ratio
             )
             text_condition = text_condition * drop_mask
@@ -469,10 +442,7 @@ class TtsModel(nn.Module):
             )
         else:
             assert features_lens is not None
-            (
-                text_condition,
-                padding_mask,
-            ) = self.forward_text_inference_gt_duration(
+            (text_condition, padding_mask,) = self.forward_text_inference_gt_duration(
                 tokens=tokens,
                 features_lens=features_lens,
                 prompt_tokens=prompt_tokens,
@@ -495,9 +465,7 @@ class TtsModel(nn.Module):
         x0 = torch.randn(
             batch_size, num_frames, self.feat_dim, device=text_condition.device
         )
-        solver = EulerSolver(
-            self, distill=self.distill, func_name="forward_fm_decoder"
-        )
+        solver = EulerSolver(self, distill=self.distill, func_name="forward_fm_decoder")
 
         x1 = solver.sample(
             x=x0,
@@ -561,13 +529,9 @@ class TtsModel(nn.Module):
             features_lens=features_lens,
         )
 
-        speech_condition = torch.where(
-            speech_condition_mask.unsqueeze(-1), 0, features
-        )
+        speech_condition = torch.where(speech_condition_mask.unsqueeze(-1), 0, features)
 
-        solver = EulerSolver(
-            self, distill=self.distill, func_name="forward_fm_decoder"
-        )
+        solver = EulerSolver(self, distill=self.distill, func_name="forward_fm_decoder")
 
         x_t_end = solver.sample(
             x=noise,

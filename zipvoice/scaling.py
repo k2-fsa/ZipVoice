@@ -24,7 +24,7 @@ from typing import Optional, Tuple, Union
 
 try:
     import k2
-except Exception as ex:
+except ImportError as e:
     logging.warning(
         "k2 is not installed correctly. Swoosh functions will fallback to "
         "PyTorch implementation, leading to slower speed and higher memory consumption."
@@ -32,7 +32,6 @@ except Exception as ex:
 import torch
 import torch.nn as nn
 from torch import Tensor
-
 
 custom_bwd = lambda func: torch.amp.custom_bwd(func, device_type="cuda")
 custom_fwd = lambda func: torch.amp.custom_fwd(func, device_type="cuda")
@@ -71,9 +70,9 @@ def logaddexp(x: Tensor, y: Tensor) -> Tensor:
 
 class PiecewiseLinear(object):
     """
-    Piecewise linear function, from float to float, specified as nonempty list of (x,y) pairs with
-    the x values in order.  x values <[initial x] or >[final x] are map to [initial y], [final y]
-    respectively.
+    Piecewise linear function, from float to float, specified as nonempty list of (x,y)
+    pairs with the x values in order.  x values <[initial x] or >[final x] are map to
+    [initial y], [final y] respectively.
     """
 
     def __init__(self, *args):
@@ -107,9 +106,7 @@ class PiecewiseLinear(object):
             for i in range(1, len(self.pairs)):
                 next_x, next_y = self.pairs[i]
                 if x >= cur_x and x <= next_x:
-                    return cur_y + (next_y - cur_y) * (x - cur_x) / (
-                        next_x - cur_x
-                    )
+                    return cur_y + (next_y - cur_y) * (x - cur_x) / (next_x - cur_x)
                 cur_x, cur_y = next_x, next_y
             assert False
 
@@ -143,9 +140,7 @@ class PiecewiseLinear(object):
     def __eq__(self, other):
         return self.pairs == other.pairs
 
-    def get_common_basis(
-        self, p: "PiecewiseLinear", include_crossings: bool = False
-    ):
+    def get_common_basis(self, p: "PiecewiseLinear", include_crossings: bool = False):
         """
         Returns (self_mod, p_mod) which are equivalent piecewise linear
         functions to self and p, but with the same x values.
@@ -157,18 +152,14 @@ class PiecewiseLinear(object):
         assert isinstance(p, PiecewiseLinear), type(p)
 
         # get sorted x-values without repetition.
-        x_vals = sorted(
-            set([x for x, _ in self.pairs] + [x for x, _ in p.pairs])
-        )
+        x_vals = sorted(set([x for x, _ in self.pairs] + [x for x, _ in p.pairs]))
         y_vals1 = [self(x) for x in x_vals]
         y_vals2 = [p(x) for x in x_vals]
 
         if include_crossings:
             extra_x_vals = []
             for i in range(len(x_vals) - 1):
-                if (y_vals1[i] > y_vals2[i]) != (
-                    y_vals1[i + 1] > y_vals2[i + 1]
-                ):
+                if (y_vals1[i] > y_vals2[i]) != (y_vals1[i + 1] > y_vals2[i + 1]):
                     # if the two lines in this subsegment potentially cross each other..
                     diff_cur = abs(y_vals1[i] - y_vals2[i])
                     diff_next = abs(y_vals1[i + 1] - y_vals2[i + 1])
@@ -189,14 +180,15 @@ class PiecewiseLinear(object):
 
 class ScheduledFloat(torch.nn.Module):
     """
-    This object is a torch.nn.Module only because we want it to show up in [top_level module].modules();
-    it does not have a working forward() function.  You are supposed to cast it to float, as
-    in, float(parent_module.whatever), and use it as something like a dropout prob.
+    This object is a torch.nn.Module only because we want it to show up in
+    [top_level module].modules(); it does not have a working forward() function.
+    You are supposed to cast it to float, as in, float(parent_module.whatever), and use
+    it as something like a dropout prob.
 
     It is a floating point value whose value changes depending on the batch count of the
     training loop.  It is a piecewise linear function where you specify the (x,y) pairs
-    in sorted order on x; x corresponds to the batch index.  For batch-index values before the
-    first x or after the last x, we just use the first or last y value.
+    in sorted order on x; x corresponds to the batch index.  For batch-index values
+    before the first x or after the last x, we just use the first or last y value.
 
     Example:
        self.dropout = ScheduledFloat((0.0, 0.2), (4000.0, 0.0), default=0.0)
@@ -214,7 +206,9 @@ class ScheduledFloat(torch.nn.Module):
         self.schedule = PiecewiseLinear(*args)
 
     def extra_repr(self) -> str:
-        return f"batch_count={self.batch_count}, schedule={str(self.schedule.pairs[1:-1])}"
+        return (
+            f"batch_count={self.batch_count}, schedule={str(self.schedule.pairs[1:-1])}"
+        )
 
     def __float__(self):
         batch_count = self.batch_count
@@ -229,7 +223,8 @@ class ScheduledFloat(torch.nn.Module):
             ans = self.schedule(self.batch_count)
             if random.random() < 0.0002:
                 logging.debug(
-                    f"ScheduledFloat: name={self.name}, batch_count={self.batch_count}, ans={ans}"
+                    f"ScheduledFloat: name={self.name}, "
+                    f"batch_count={self.batch_count}, ans={ans}"
                 )
             return ans
 
@@ -318,11 +313,7 @@ class SoftmaxFunction(torch.autograd.Function):
 
 
 def softmax(x: Tensor, dim: int):
-    if (
-        not x.requires_grad
-        or torch.jit.is_scripting()
-        or torch.jit.is_tracing()
-    ):
+    if not x.requires_grad or torch.jit.is_scripting() or torch.jit.is_tracing():
         return x.softmax(dim=dim)
 
     return SoftmaxFunction.apply(x, dim)
@@ -377,8 +368,7 @@ class BiasNormFunction(torch.autograd.Function):
         with torch.enable_grad():
             # recompute scales from x, bias and log_scale.
             scales = (
-                torch.mean((x - bias) ** 2, dim=ctx.channel_dim, keepdim=True)
-                ** -0.5
+                torch.mean((x - bias) ** 2, dim=ctx.channel_dim, keepdim=True) ** -0.5
             ) * log_scale.exp()
             ans = x * scales
             ans.backward(gradient=ans_grad)
@@ -447,8 +437,7 @@ class BiasNorm(torch.nn.Module):
             for _ in range(channel_dim + 1, x.ndim):
                 bias = bias.unsqueeze(-1)
             scales = (
-                torch.mean((x - bias) ** 2, dim=channel_dim, keepdim=True)
-                ** -0.5
+                torch.mean((x - bias) ** 2, dim=channel_dim, keepdim=True) ** -0.5
             ) * self.log_scale.exp()
             return x * scales
 
@@ -487,9 +476,7 @@ def ScaledLinear(*args, initial_scale: float = 1.0, **kwargs) -> nn.Linear:
     with torch.no_grad():
         ans.weight[:] *= initial_scale
         if ans.bias is not None:
-            torch.nn.init.uniform_(
-                ans.bias, -0.1 * initial_scale, 0.1 * initial_scale
-            )
+            torch.nn.init.uniform_(ans.bias, -0.1 * initial_scale, 0.1 * initial_scale)
     return ans
 
 
@@ -520,9 +507,7 @@ class BalancerFunction(torch.autograd.Function):
         return x
 
     @staticmethod
-    def backward(
-        ctx, x_grad: Tensor
-    ) -> Tuple[Tensor, None, None, None, None, None]:
+    def backward(ctx, x_grad: Tensor) -> Tuple[Tensor, None, None, None, None, None]:
         (x,) = ctx.saved_tensors
         (
             min_mean,
@@ -542,19 +527,15 @@ class BalancerFunction(torch.autograd.Function):
                     mean_dims = [i for i in range(x.ndim) if i != channel_dim]
                     uncentered_var = (x**2).mean(dim=mean_dims, keepdim=True)
                     mean = x.mean(dim=mean_dims, keepdim=True)
-                    stddev = (
-                        (uncentered_var - (mean * mean))
-                        .clamp(min=1.0e-20)
-                        .sqrt()
-                    )
+                    stddev = (uncentered_var - (mean * mean)).clamp(min=1.0e-20).sqrt()
                     rms = uncentered_var.clamp(min=1.0e-20).sqrt()
 
                     m = mean / stddev
                     # part of loss that relates to mean / stddev
                     m_loss = (m - m.clamp(min=min_mean, max=max_mean)).abs()
 
-                    # put a much larger scale on the RMS-max-limit loss, so that if both it and the
-                    # m_loss are violated we fix the RMS loss first.
+                    # put a much larger scale on the RMS-max-limit loss, so that if both
+                    # it and the m_loss are violated we fix the RMS loss first.
                     rms_clamped = rms.clamp(min=min_rms, max=max_rms)
                     r_loss = (rms_clamped / rms).log().abs()
 
@@ -572,14 +553,16 @@ class BalancerFunction(torch.autograd.Function):
                     loss_grad = loss_grad * (grad_scale / loss_grad_rms)
 
                     x_grad_float = x_grad.to(torch.float32)
-                    # scale each element of loss_grad by the absolute value of the corresponding
-                    # element of x_grad, which we view as a noisy estimate of its magnitude for that
-                    # (frame and dimension).  later we can consider factored versions.
+                    # scale each element of loss_grad by the absolute value of the
+                    # corresponding element of x_grad, which we view as a noisy estimate
+                    # of its magnitude for that (frame and dimension).  later we can
+                    # consider factored versions.
                     x_grad_mod = x_grad_float + (x_grad_float.abs() * loss_grad)
                     x_grad = x_grad_mod.to(x_grad.dtype)
         except Exception as e:
             logging.info(
-                f"Caught exception in Balancer backward: {e}, size={list(x_grad.shape)}, will continue."
+                f"Caught exception in Balancer backward: {e}, "
+                f"size={list(x_grad.shape)}, will continue."
             )
 
         return x_grad, None, None, None, None, None, None
@@ -656,12 +639,13 @@ class Balancer(torch.nn.Module):
 
         prob = float(self.prob)
         if random.random() < prob:
-            # The following inner-functions convert from the way we historically specified
-            # these limitations, as limits on the absolute value and the proportion of positive
-            # values, to limits on the RMS value and the (mean / stddev).
+            # The following inner-functions convert from the way we historically
+            # specified these limitations, as limits on the absolute value and the
+            # proportion of positive values, to limits on the RMS value and
+            # the (mean / stddev).
             def _abs_to_rms(x):
-                # for normally distributed data, if the expected absolute value is x, the
-                # expected rms value will be sqrt(pi/2) * x.
+                # for normally distributed data, if the expected absolute value is x,
+                # the expected rms value will be sqrt(pi/2) * x.
                 return 1.25331413732 * x
 
             def _proportion_positive_to_mean(x):
@@ -674,8 +658,9 @@ class Balancer(torch.nn.Module):
                 def _approx_inverse_erf(x):
                     # 1 / (sqrt(pi) * ln(2)),
                     # see https://math.stackexchange.com/questions/321569/approximating-the-error-function-erf-by-analytical-functions
-                    # this approximation is extremely crude and gets progressively worse for
-                    # x very close to -1 or +1, but we mostly care about the "middle" region
+                    # this approximation is extremely crude and gets progressively worse
+                    # for x very close to -1 or +1, but we mostly care about the
+                    # "middle" region
                     # e.g. _approx_inverse_erf(0.05) = 0.0407316414078772,
                     # and math.erf(0.0407316414078772) = 0.045935330944660666,
                     # which is pretty close to 0.05.
@@ -780,9 +765,7 @@ def _whitening_metric(x: Tensor, num_groups: int):
     # the following expression is what we'd get if we took the matrix product
     # of each covariance and measured the mean of its trace, i.e.
     # the same as _diag(torch.matmul(x_covar, x_covar)).mean().
-    x_covarsq_mean_diag = (x_covar**2).sum() / (
-        num_groups * channels_per_group
-    )
+    x_covarsq_mean_diag = (x_covar**2).sum() / (num_groups * channels_per_group)
     # this metric will be >= 1.0; the larger it is, the less 'white' the data was.
     metric = x_covarsq_mean_diag / (x_covar_mean_diag**2 + 1.0e-20)
     return metric
@@ -893,11 +876,7 @@ class Whiten(nn.Module):
         and nothing will happen in backprop.
         """
         grad_scale = float(self.grad_scale)
-        if (
-            not x.requires_grad
-            or random.random() > self.prob
-            or grad_scale == 0
-        ):
+        if not x.requires_grad or random.random() > self.prob or grad_scale == 0:
             return _no_op(x)
         else:
             return WhiteningPenaltyFunction.apply(x, self)
@@ -916,9 +895,7 @@ class WithLoss(torch.autograd.Function):
     def backward(ctx, ans_grad: Tensor):
         return (
             ans_grad,
-            torch.ones(
-                ctx.y_shape, dtype=ans_grad.dtype, device=ans_grad.device
-            ),
+            torch.ones(ctx.y_shape, dtype=ans_grad.dtype, device=ans_grad.device),
             None,
         )
 
@@ -947,9 +924,7 @@ class LimitParamValue(torch.autograd.Function):
         )
         # where x > ctx.max, ensure all grads are positive (this will tend to make
         # x more negative).
-        x_grad *= torch.where(
-            torch.logical_and(x_grad < 0, x > ctx.max), -1.0, 1.0
-        )
+        x_grad *= torch.where(torch.logical_and(x_grad < 0, x > ctx.max), -1.0, 1.0)
         return x_grad, None, None
 
 
@@ -976,6 +951,7 @@ def _no_op(x: Tensor) -> Tensor:
         return x.chunk(1, dim=-1)[0]
 
 
+# Identity more friendly to backward hooks than nn.Identity(), for diagnostic reasons.
 class Identity(torch.nn.Module):
     def __init__(self):
         super(Identity, self).__init__()
@@ -991,9 +967,7 @@ class Dropout2(nn.Module):
         self.p = p
 
     def forward(self, x: Tensor) -> Tensor:
-        return torch.nn.functional.dropout(
-            x, p=float(self.p), training=self.training
-        )
+        return torch.nn.functional.dropout(x, p=float(self.p), training=self.training)
 
 
 class MulForDropout3(torch.autograd.Function):
@@ -1066,9 +1040,9 @@ class SwooshLFunction(torch.autograd.Function):
                 floor = coeff
                 ceil = 1.0 + coeff + 0.005
 
-                d_scaled = (grad - floor) * (
-                    255.0 / (ceil - floor)
-                ) + torch.rand_like(grad)
+                d_scaled = (grad - floor) * (255.0 / (ceil - floor)) + torch.rand_like(
+                    grad
+                )
                 if __name__ == "__main__":
                     # for self-testing only.
                     assert d_scaled.min() >= 0.0
@@ -1137,9 +1111,9 @@ class SwooshRFunction(torch.autograd.Function):
                 floor = -0.08
                 ceil = 0.925
 
-                d_scaled = (grad - floor) * (
-                    255.0 / (ceil - floor)
-                ) + torch.rand_like(grad)
+                d_scaled = (grad - floor) * (255.0 / (ceil - floor)) + torch.rand_like(
+                    grad
+                )
                 if __name__ == "__main__":
                     # for self-testing only.
                     assert d_scaled.min() >= 0.0
@@ -1217,8 +1191,7 @@ class ActivationDropoutAndLinearFunction(torch.autograd.Function):
                 dropout_shape[dropout_shared_dim] = 1
             # else it won't be very memory efficient.
             dropout_mask = (1.0 / (1.0 - dropout_p)) * (
-                torch.rand(*dropout_shape, device=x.device, dtype=x.dtype)
-                > dropout_p
+                torch.rand(*dropout_shape, device=x.device, dtype=x.dtype) > dropout_p
             )
         else:
             dropout_mask = None
@@ -1381,9 +1354,7 @@ def _test_whiten():
 def _test_balancer_sign():
     probs = torch.arange(0, 1, 0.01)
     N = 1000
-    x = 1.0 * (
-        (2.0 * (torch.rand(probs.numel(), N) < probs.unsqueeze(-1))) - 1.0
-    )
+    x = 1.0 * ((2.0 * (torch.rand(probs.numel(), N) < probs.unsqueeze(-1))) - 1.0)
     x = x.detach()
     x.requires_grad = True
     m = Balancer(
@@ -1407,9 +1378,7 @@ def _test_balancer_sign():
 def _test_balancer_magnitude():
     magnitudes = torch.arange(0, 1, 0.01)
     N = 1000
-    x = torch.sign(torch.randn(magnitudes.numel(), N)) * magnitudes.unsqueeze(
-        -1
-    )
+    x = torch.sign(torch.randn(magnitudes.numel(), N)) * magnitudes.unsqueeze(-1)
     x = x.detach()
     x.requires_grad = True
     m = Balancer(
@@ -1504,7 +1473,7 @@ def _test_activation_dropout_and_linear():
     out_channels = 30
 
     for bias in [True, False]:
-        # actually we don't test for dropout_p != 0.0 because forward functions will give
+        # actually we don't test for dropout_p != 0.0 because forward functions will
         # different answers.  This is because we are using the k2 implementation of
         # swoosh_l an swoosh_r inside SwooshL() and SwooshR(), and they call randn()
         # internally, messing up the random state.
@@ -1555,13 +1524,9 @@ def _test_activation_dropout_and_linear():
                 print("y1 = ", y1)
                 print("y2 = ", y2)
                 assert torch.allclose(y1, y2, atol=0.02)
-                assert torch.allclose(
-                    m1[2].weight.grad, m2.weight.grad, atol=1.0e-05
-                )
+                assert torch.allclose(m1[2].weight.grad, m2.weight.grad, atol=1.0e-05)
                 if bias:
-                    assert torch.allclose(
-                        m1[2].bias.grad, m2.bias.grad, atol=1.0e-05
-                    )
+                    assert torch.allclose(m1[2].bias.grad, m2.bias.grad, atol=1.0e-05)
                 print("x1.grad = ", x1.grad)
                 print("x2.grad = ", x2.grad)
 
@@ -1585,7 +1550,6 @@ if __name__ == "__main__":
     _test_whiten()
     _test_balancer_sign()
     _test_balancer_magnitude()
-    _test_double_swish_deriv()
     _test_swooshr_deriv()
     _test_swooshl_deriv()
     _test_activation_dropout_and_linear()

@@ -62,9 +62,11 @@ def get_tensor_stats(
         "positive" -> take (x > 0) before summing
         "rms" -> square before summing, we'll take sqrt later
         "value"  -> just sum x itself
-        "max", "min" -> take the maximum or minimum [over all other dims but dim] instead of summing
-        "rms-sort" -> this is a bit different than the others, it's based on computing the
-             rms over the specified dim and returning percentiles of the result (11 of them).
+        "max", "min" -> take the maximum or minimum [over all other dims but dim]
+            instead of summing
+        "rms-sort" -> this is a bit different than the others, it's based on computing
+            the rms over the specified dim and returning percentiles of the result
+            (11 of them).
     Returns:
       stats: a Tensor of shape (x.shape[dim],).
       count: an integer saying how many items were counted in each element
@@ -124,8 +126,9 @@ class TensorDiagnostic(object):
       opts:
         Options object.
       name:
-        The name associated with this diagnostics object, will probably be {module_name}.X
-           where X is "output" or "grad", or {parameter_name}.Y where Y is param_value or param_grad.
+        The name associated with this diagnostics object, will probably be
+            {module_name}.X where X is "output" or "grad", or {parameter_name}.
+            Y where Y is param_value or param_grad.
     """
 
     def __init__(self, opts: TensorDiagnosticOptions, name: str):
@@ -145,12 +148,13 @@ class TensorDiagnostic(object):
         # the keys into self.stats[dim] are strings, whose values can be
         # "abs", "max", "min" ,"value", "positive", "rms", "value".
         # The values e.g. self.stats[dim]["rms"] are lists of dataclass TensorAndCount,
-        # containing a tensor and its associated count (which is the sum of the other dims
-        # that we aggregated over, e.g. the number of frames and/or batch elements and/or
-        # channels.
-        # ... we actually accumulate the Tensors / counts any time we have the same-dim tensor,
-        # only adding a new element to the list if there was a different dim.
-        # if the string in the key is "eigs", if we detect a length mismatch we put None as the value.
+        # containing a tensor and its associated count (which is the sum of the other
+        # dims that we aggregated over, e.g. the number of frames and/or batch elements
+        # and/or channels.
+        # ... we actually accumulate the Tensors / counts any time we have the same-dim
+        # tensor, only adding a new element to the list if there was a different dim.
+        # if the string in the key is "eigs", if we detect a length mismatch we put None
+        # as the value.
 
     def accumulate(self, x, class_name: Optional[str] = None):
         """
@@ -174,8 +178,8 @@ class TensorDiagnostic(object):
         for dim in range(ndim):
             this_dim_stats = self.stats[dim]
             if ndim > 1:
-                # rms-sort is different from the others, it's based on summing over just this
-                # dim, then sorting and returning the percentiles.
+                # rms-sort is different from the others, it's based on summing over just
+                # this dim, then sorting and returning the percentiles.
                 stats_types = [
                     "abs",
                     "max",
@@ -216,8 +220,9 @@ class TensorDiagnostic(object):
                         break
                 if not done:
                     if this_dim_stats[stats_type] != [] and stats_type == "eigs":
-                        # >1 size encountered on this dim, e.g. it's a batch or time dimension,
-                        # don't accumulat "eigs" stats type, it uses too much memory
+                        # >1 size encountered on this dim, e.g. it's a batch or time
+                        # dimension, don't accumulat "eigs" stats type, it uses too much
+                        # memory
                         this_dim_stats[stats_type] = None
                     else:
                         this_dim_stats[stats_type].append(TensorAndCount(stats, count))
@@ -236,7 +241,8 @@ class TensorDiagnostic(object):
                     stddev_stats_list = []
                     for r, v in zip(rms_stats_list, value_stats_list):
                         stddev_stats_list.append(
-                            # r.count and v.count should be the same, but we don't check this.
+                            # r.count and v.count should be the same, but we don't check
+                            # this.
                             TensorAndCount(
                                 r.tensor - v.tensor * v.tensor / (v.count + 1.0e-20),
                                 r.count,
@@ -245,9 +251,9 @@ class TensorDiagnostic(object):
                     this_dim_stats["stddev"] = stddev_stats_list
 
             for stats_type, stats_list in this_dim_stats.items():
-                # stats_type could be "rms", "value", "abs", "eigs", "positive", "min" or "max".
-                # "stats_list" could be a list of TensorAndCount (one list per distinct tensor
-                # shape of the stats), or None
+                # stats_type could be "rms", "value", "abs", "eigs", "positive", "min"
+                # or "max". "stats_list" could be a list of TensorAndCount (one list per
+                # distinct tensor shape of the stats), or None
                 if stats_list is None:
                     assert stats_type == "eigs"
                     continue
@@ -310,8 +316,8 @@ class TensorDiagnostic(object):
                 if stats_type in ["value", "rms", "stddev", "eigs"]:
                     # This norm is useful because it is strictly less than the largest
                     # sqrt(eigenvalue) of the variance, which we print out, and shows,
-                    # speaking in an approximate way, how much of that largest eigenvalue
-                    # can be attributed to the mean of the distribution.
+                    # speaking in an approximate way, how much of that largest
+                    # eigenvalue can be attributed to the mean of the distribution.
                     norm = (stats**2).sum().sqrt().item()
                     ans += f", norm={norm:.2g}"
                 mean = stats.mean().item()
@@ -319,7 +325,9 @@ class TensorDiagnostic(object):
                 ans += f", mean={mean:.3g}, rms={rms:.3g}"
 
                 # OK, "ans" contains the actual stats, e.g.
-                # ans = "percentiles: [0.43 0.46 0.48 0.49 0.49 0.5 0.51 0.52 0.53 0.54 0.59], mean=0.5, rms=0.5"
+                # ans = "percentiles: \
+                # [0.43 0.46 0.48 0.49 0.49 0.5 0.51 0.52 0.53 0.54 0.59], \
+                # mean=0.5, rms=0.5"
 
                 sizes = [x.tensor.shape[0] for x in stats_list]
                 size_str = (
@@ -329,7 +337,8 @@ class TensorDiagnostic(object):
                     f" type={self.class_name}," if self.class_name is not None else ""
                 )
                 print(
-                    f"module={self.name},{maybe_class_name} dim={dim}, size={size_str}, {stats_type} {ans}"
+                    f"module={self.name},{maybe_class_name} dim={dim}, size={size_str}, "
+                    f"{stats_type} {ans}"
                 )
 
 
@@ -372,8 +381,8 @@ class ScalarDiagnostic(object):
         limit = 10
         if len(self.saved_inputs) > limit:
             print(
-                f"ERROR: forward pass called for this module over {limit} times with no backward pass. "
-                f" Will not accumulate scalar stats."
+                f"ERROR: forward pass called for this module over {limit} times "
+                f"with no backward pass. Will not accumulate scalar stats."
             )
             self.is_ok = False
             return
@@ -391,7 +400,8 @@ class ScalarDiagnostic(object):
         if len(self.saved_inputs) == 0 or grad.shape != last_shape:
             print(
                 f"ERROR: shape mismatch or no forward activation present when backward "
-                f"pass called: grad shape ={tuple(grad.shape)}, num-saved-inputs={len(self.saved_inputs)}"
+                f"pass called: grad shape ={tuple(grad.shape)}"
+                f", num-saved-inputs={len(self.saved_inputs)}"
                 f", shape-of-last-saved-input={last_shape}"
             )
             self.is_ok = False
@@ -454,8 +464,9 @@ class ScalarDiagnostic(object):
         counts_cumsum = counts.cumsum(dim=0)
         counts_tot = counts_cumsum[-1]
 
-        # subdivide the distribution up into `num_bins` intervals for analysis, for greater
-        # statistical significance.  each bin corresponds to multiple of the original 'tick' intervals.
+        # subdivide the distribution up into `num_bins` intervals for analysis, for
+        # greater statistical significance.  each bin corresponds to multiple of the
+        # original 'tick' intervals.
         num_bins = 20
 
         # integer division
@@ -488,8 +499,8 @@ class ScalarDiagnostic(object):
         bin_conf_interval = bin_gradsq.sqrt() / (
             bin_counts + 1
         )  # consider this a standard deviation.
-        # bin_grad / bin_abs_grad will give us a sense for how important in a practical sense,
-        # the gradients are.
+        # bin_grad / bin_abs_grad will give us a sense for how important in a practical
+        # sense, the gradients are.
         bin_abs_grad = bin_abs_grad / (bin_counts + 1)
 
         bin_rel_grad = bin_grad / (bin_abs_grad + 1.0e-20)
@@ -505,8 +516,10 @@ class ScalarDiagnostic(object):
         )
 
         print(
-            f"module={self.name},{maybe_class_name} bin-boundaries={tensor_to_str(bin_boundaries)}, "
-            f"rel_grad={tensor_to_str(bin_rel_grad)}, grad_conf={tensor_to_str(bin_conf)}"
+            f"module={self.name},{maybe_class_name} "
+            f"bin-boundaries={tensor_to_str(bin_boundaries)}, "
+            f"rel_grad={tensor_to_str(bin_rel_grad)}, "
+            f"grad_conf={tensor_to_str(bin_conf)}"
         )
 
 
@@ -541,11 +554,12 @@ class ModelDiagnostic(object):
 
 def get_class_name(module: nn.Module):
     ans = type(module).__name__
-    # we put the below in try blocks in case anyone is using a different version of these modules that
-    # might have different member names.
+    # we put the below in try blocks in case anyone is using a different version of
+    # these modules that might have different member names.
     if ans == "Balancer" or ans == "ActivationBalancer":
         try:
-            ans += f"[{float(module.min_positive)},{float(module.max_positive)},{float(module.min_abs)},{float(module.max_abs)}]"
+            ans += f"[{float(module.min_positive)},{float(module.max_positive)},"
+            f"{float(module.min_abs)},{float(module.max_abs)}]"
         except:
             pass
     elif ans == "AbsValuePenalizer":
@@ -643,9 +657,9 @@ def attach_diagnostics(
             "Swoosh",
         ]:
             # For these specific module types, accumulate some additional diagnostics
-            # that can help us improve the activation function.  These require a lot of memory,
-            # to save the forward activations, so limit this to some select classes.
-            # Note: this will not work correctly for all model types.
+            # that can help us improve the activation function.  These require a lot of
+            # memory, to save the forward activations, so limit this to some select
+            # classes. Note: this will not work correctly for all model types.
             def scalar_forward_hook(
                 _module, _input, _output, _model_diagnostic=ans, _name=name
             ):

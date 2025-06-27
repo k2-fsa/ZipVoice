@@ -1,18 +1,15 @@
+import argparse
 import collections
 import json
 import logging
-import numpy as np
 import os
-import random
 import socket
 import subprocess
 import sys
-
-
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import torch
 from torch import distributed as dist
@@ -105,9 +102,7 @@ class MetricsTracker(collections.defaultdict):
             if k == "frames" or k == "utterances":
                 continue
             norm_value = (
-                float(v) / num_frames
-                if "utt_" not in k
-                else float(v) / num_utterances
+                float(v) / num_frames if "utt_" not in k else float(v) / num_utterances
             )
             ans.append((k, norm_value))
         return ans
@@ -157,9 +152,7 @@ def setup_dist(
         )
 
     if "MASTER_PORT" not in os.environ:
-        os.environ["MASTER_PORT"] = (
-            "12354" if master_port is None else str(master_port)
-        )
+        os.environ["MASTER_PORT"] = "12354" if master_port is None else str(master_port)
 
     if use_ddp_launch is False:
         dist.init_process_group("nccl", rank=rank, world_size=world_size)
@@ -227,15 +220,13 @@ def pad_labels(y: List[List[int]], pad_id: int, device: torch.device):
     Returns:
       Return a Tensor of padded transcripts.
     """
-    y = [l + [pad_id] for l in y]
-    length = max([len(l) for l in y])
-    y = [l + [pad_id] * (length - len(l)) for l in y]
+    y = [token_ids + [pad_id] for token_ids in y]
+    length = max([len(token_ids) for token_ids in y])
+    y = [token_ids + [pad_id] * (length - len(token_ids)) for token_ids in y]
     return torch.tensor(y, dtype=torch.int64, device=device)
 
 
-def get_tokens_index(
-    durations: List[List[int]], num_frames: int
-) -> torch.Tensor:
+def get_tokens_index(durations: List[List[int]], num_frames: int) -> torch.Tensor:
     """
     Gets position in the transcript for each frame, i.e. the position
     in the symbol-sequence to look up.
@@ -269,8 +260,8 @@ def to_int_tuple(s: Union[str, int]):
 
 
 def get_adjusted_batch_count(params: AttributeDict) -> float:
-    # returns the number of batches we would have used so far if we had used the reference
-    # duration.  This is for purposes of set_batch_count().
+    # returns the number of batches we would have used so far if we had used the
+    # reference duration.  This is for purposes of set_batch_count().
     return (
         params.batch_idx_train
         * (params.max_duration * params.world_size)
@@ -309,14 +300,11 @@ def condition_time_mask(
         filled with `False`.
     """
     mask_size = (
-        torch.zeros_like(features_lens, dtype=torch.float32).uniform_(
-            *mask_percent
-        )
+        torch.zeros_like(features_lens, dtype=torch.float32).uniform_(*mask_percent)
         * features_lens
     ).to(torch.int64)
     mask_starts = (
-        torch.rand_like(mask_size, dtype=torch.float32)
-        * (features_lens - mask_size)
+        torch.rand_like(mask_size, dtype=torch.float32) * (features_lens - mask_size)
     ).to(torch.int64)
     mask_ends = mask_starts + mask_size
     max_len = max(max_len, features_lens.max())
@@ -398,9 +386,7 @@ def setup_logger(
         formatter = f"%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] ({rank}/{world_size}) %(message)s"  # noqa
         log_filename = f"{log_filename}-{date_time}-{rank}"
     else:
-        formatter = (
-            "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-        )
+        formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
         log_filename = f"{log_filename}-{date_time}"
 
     os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -454,9 +440,7 @@ def get_git_sha1():
             )
             > 0
         )
-        git_commit = (
-            git_commit + "-dirty" if dirty_commit else git_commit + "-clean"
-        )
+        git_commit = git_commit + "-dirty" if dirty_commit else git_commit + "-clean"
     except:  # noqa
         return None
 
@@ -522,8 +506,8 @@ def get_parameter_groups_with_lrs(
     freeze_modules: List[str] = [],
 ) -> List[dict]:
     """
-    This is for use with the ScaledAdam optimizers (more recent versions that accept lists of
-    named-parameters; we can, if needed, create a version without the names).
+    This is for use with the ScaledAdam optimizers (more recent versions that accept
+    lists of named-parameters; we can, if needed, create a version without the names).
 
     It provides a way to specify learning-rate scales inside the module, so that if
     any nn.Module in the hierarchy has a floating-point parameter 'lr_scale', it will
@@ -543,8 +527,6 @@ def get_parameter_groups_with_lrs(
          ...   ]
 
     """
-    named_modules = list(model.named_modules())
-
     # flat_lr_scale just contains the lr_scale explicitly specified
     # for each prefix of the name, e.g. 'encoder.layers.3', these need
     # to be multiplied for all prefix of the name of any given parameter.
@@ -579,16 +561,9 @@ def get_parameter_groups_with_lrs(
         for part in split_name[1:]:
             prefix = ".".join([prefix, part])
             cur_lr *= flat_lr_scale[prefix]
-        lr_to_params[cur_lr].append(
-            (name, parameter) if include_names else parameter
-        )
+        lr_to_params[cur_lr].append((name, parameter) if include_names else parameter)
 
     if include_names:
-        return [
-            {"named_params": pairs, "lr": lr}
-            for lr, pairs in lr_to_params.items()
-        ]
+        return [{"named_params": pairs, "lr": lr} for lr, pairs in lr_to_params.items()]
     else:
-        return [
-            {"params": params, "lr": lr} for lr, params in lr_to_params.items()
-        ]
+        return [{"params": params, "lr": lr} for lr, params in lr_to_params.items()]

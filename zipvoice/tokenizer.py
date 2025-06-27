@@ -109,9 +109,7 @@ class EnglishTextNormalizer(TextNormalizer):
         if denominator == 2:
             return " " + self._inflect.number_to_words(numerator) + " halves "
         if denominator == 4:
-            return (
-                " " + self._inflect.number_to_words(numerator) + " quarters "
-            )
+            return " " + self._inflect.number_to_words(numerator) + " quarters "
         return (
             " "
             + self._inflect.number_to_words(numerator)
@@ -163,17 +161,9 @@ class EnglishTextNormalizer(TextNormalizer):
             if num == 2000:
                 return " two thousand "
             elif num > 2000 and num < 2010:
-                return (
-                    " two thousand "
-                    + self._inflect.number_to_words(num % 100)
-                    + " "
-                )
+                return " two thousand " + self._inflect.number_to_words(num % 100) + " "
             elif num % 100 == 0:
-                return (
-                    " "
-                    + self._inflect.number_to_words(num // 100)
-                    + " hundred "
-                )
+                return " " + self._inflect.number_to_words(num // 100) + " hundred "
             else:
                 return (
                     " "
@@ -190,9 +180,7 @@ class EnglishTextNormalizer(TextNormalizer):
         text = re.sub(self._pounds_re, r"\1 pounds", text)
         text = re.sub(self._dollars_re, self._expand_dollars, text)
         text = re.sub(self._fraction_re, self._expand_fraction, text)
-        text = re.sub(
-            self._decimal_number_re, self._expand_decimal_point, text
-        )
+        text = re.sub(self._decimal_number_re, self._expand_decimal_point, text)
         text = re.sub(self._percent_number_re, self._expand_percent, text)
         text = re.sub(self._ordinal_re, self._expand_ordinal, text)
         text = re.sub(self._number_re, self._expand_number, text)
@@ -341,9 +329,7 @@ class EmiliaTokenizer(Tokenizer):
         self,
         tokens_list: List[List[str]],
     ) -> List[List[int]]:
-        assert (
-            self.has_tokens
-        ), "Please initialize Tokenizer with a tokens file."
+        assert self.has_tokens, "Please initialize Tokenizer with a tokens file."
         token_ids_list = []
 
         for tokens in tokens_list:
@@ -371,9 +357,7 @@ class EmiliaTokenizer(Tokenizer):
             phones = []
             for x in full:
                 # valid pinyin (in tone3 style) is alphabet + 1 number in [1-5].
-                if not (
-                    x[0:-1].isalpha() and x[-1] in ("1", "2", "3", "4", "5")
-                ):
+                if not (x[0:-1].isalpha() and x[-1] in ("1", "2", "3", "4", "5")):
                     phones.append(x)
                     continue
                 else:
@@ -398,9 +382,7 @@ class EmiliaTokenizer(Tokenizer):
             assert text.startswith("<") and text.endswith(">")
             text = text.lstrip("<").rstrip(">")
             # valid pinyin (in tone3 style) is alphabet + 1 number in [1-5].
-            if not (
-                text[0:-1].isalpha() and text[-1] in ("1", "2", "3", "4", "5")
-            ):
+            if not (text[0:-1].isalpha() and text[-1] in ("1", "2", "3", "4", "5")):
                 logging.warning(
                     f"Strings enclosed with <> should be pinyin, \
                     but got: {text}. Skipped it. "
@@ -629,8 +611,7 @@ class LibriTTSTokenizer(Tokenizer):
             tokens_list = [list(texts[i]) for i in range(len(texts))]
         elif self.type == "phone":
             tokens_list = [
-                phonemize_espeak(texts[i].lower(), "en-us")
-                for i in range(len(texts))
+                phonemize_espeak(texts[i].lower(), "en-us") for i in range(len(texts))
             ]
         elif self.type == "bpe":
             tokens_list = self.sp.encode(texts, out_type=str)
@@ -641,13 +622,9 @@ class LibriTTSTokenizer(Tokenizer):
         self,
         tokens_list: List[List[str]],
     ) -> List[List[int]]:
-        assert (
-            self.has_tokens
-        ), "Please initialize Tokenizer with a tokens file."
+        assert self.has_tokens, "Please initialize Tokenizer with a tokens file."
 
-        assert (
-            self.type != "bpe"
-        ), "BPE tokenizer does not support this function."
+        assert self.type != "bpe", "BPE tokenizer does not support this function."
 
         token_ids_list = []
 

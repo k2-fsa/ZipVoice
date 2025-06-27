@@ -44,14 +44,10 @@ import argparse
 from pathlib import Path
 
 import torch
+from checkpoint import average_checkpoints_with_averaged_model, find_checkpoints
 from model import get_distill_model, get_model
 from tokenizer import EmiliaTokenizer, LibriTTSTokenizer
 from train_flow import add_model_arguments, get_params
-
-from checkpoint import (
-    average_checkpoints_with_averaged_model,
-    find_checkpoints,
-)
 from utils import str2bool
 
 
@@ -155,8 +151,7 @@ def main():
         ]
         if len(filenames) == 0:
             raise ValueError(
-                f"No checkpoints found for"
-                f" --iter {params.iter}, --avg {params.avg}"
+                f"No checkpoints found for" f" --iter {params.iter}, --avg {params.avg}"
             )
         elif len(filenames) < params.avg + 1:
             raise ValueError(

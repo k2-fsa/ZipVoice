@@ -36,7 +36,8 @@ def register_inf_check_hooks(model: nn.Module) -> None:
         if name == "":
             name = "<top-level>"
 
-        # default param _name is a way to capture the current value of the variable "name".
+        # default param _name is a way to capture the current value of the variable
+        # "name".
         def forward_hook(_module, _input, _output, _name=name):
             if isinstance(_output, Tensor):
                 try:
@@ -58,7 +59,8 @@ def register_inf_check_hooks(model: nn.Module) -> None:
                     except RuntimeError:  # e.g. CUDA out of memory
                         pass
 
-        # default param _name is a way to capture the current value of the variable "name".
+        # default param _name is a way to capture the current value of the variable
+        # "name".
         def backward_hook(_module, _input, _output, _name=name):
             if isinstance(_output, Tensor):
                 try:

@@ -69,9 +69,7 @@ class UTMOSScore:
     def __init__(self, utmos_model_path, ssl_model_path):
         self.sample_rate = 16000
         self.device = (
-            torch.device("cuda")
-            if torch.cuda.is_available()
-            else torch.device("cpu")
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
         self.model = (
             BaselineLightningModule.load_from_checkpoint(
@@ -121,9 +119,7 @@ class UTMOSScore:
 
         score_lst = []
         for fname in tqdm(os.listdir(dir)):
-            speech = _load_speech_task(
-                os.path.join(dir, fname), self.sample_rate
-            )
+            speech = _load_speech_task(os.path.join(dir, fname), self.sample_rate)
             speech = speech.to(self.device)
             with torch.no_grad():
                 score = self.score(speech)
@@ -224,7 +220,7 @@ class LDConditioner(nn.Module):
         self.input_dim = input_dim
         self.judge_dim = judge_dim
         self.num_judges = num_judges
-        assert num_judges != None
+        assert num_judges is not None
         self.judge_embedding = nn.Embedding(num_judges, self.judge_dim)
         # concat [self.output_layer, phoneme features]
 
@@ -264,7 +260,7 @@ class LDConditioner(nn.Module):
                 ),
                 dim=2,
             )
-        if judge_ids != None:
+        if judge_ids is not None:
             concatenated_feature = torch.cat(
                 (
                     concatenated_feature,

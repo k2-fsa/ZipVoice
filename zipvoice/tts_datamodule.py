@@ -41,7 +41,6 @@ from lhotse.dataset.input_strategies import (  # noqa F401 For AudioSamples
 )
 from lhotse.utils import fix_random_seed, ifnone
 from torch.utils.data import DataLoader
-
 from utils import str2bool
 
 
@@ -190,9 +189,7 @@ class TtsDataModule:
                 return_text=True,
                 return_tokens=True,
                 return_spk_ids=True,
-                feature_input_strategy=OnTheFlyFeatures(
-                    TorchAudioFbank(config)
-                ),
+                feature_input_strategy=OnTheFlyFeatures(TorchAudioFbank(config)),
                 return_cuts=self.args.return_cuts,
             )
 
@@ -250,9 +247,7 @@ class TtsDataModule:
                 return_text=True,
                 return_tokens=True,
                 return_spk_ids=True,
-                feature_input_strategy=OnTheFlyFeatures(
-                    TorchAudioFbank(config)
-                ),
+                feature_input_strategy=OnTheFlyFeatures(TorchAudioFbank(config)),
                 return_cuts=self.args.return_cuts,
             )
         else:
@@ -293,9 +288,7 @@ class TtsDataModule:
                 return_text=True,
                 return_tokens=True,
                 return_spk_ids=True,
-                feature_input_strategy=OnTheFlyFeatures(
-                    TorchAudioFbank(config)
-                ),
+                feature_input_strategy=OnTheFlyFeatures(TorchAudioFbank(config)),
                 return_cuts=self.args.return_cuts,
                 return_audio=True,
             )
@@ -325,16 +318,12 @@ class TtsDataModule:
     @lru_cache()
     def train_emilia_EN_cuts(self) -> CutSet:
         logging.info("About to get train the EN subset")
-        return load_manifest_lazy(
-            self.args.manifest_dir / "emilia_cuts_EN.jsonl.gz"
-        )
+        return load_manifest_lazy(self.args.manifest_dir / "emilia_cuts_EN.jsonl.gz")
 
     @lru_cache()
     def train_emilia_ZH_cuts(self) -> CutSet:
         logging.info("About to get train the ZH subset")
-        return load_manifest_lazy(
-            self.args.manifest_dir / "emilia_cuts_ZH.jsonl.gz"
-        )
+        return load_manifest_lazy(self.args.manifest_dir / "emilia_cuts_ZH.jsonl.gz")
 
     @lru_cache()
     def dev_emilia_EN_cuts(self) -> CutSet:

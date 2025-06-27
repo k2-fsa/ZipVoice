@@ -18,20 +18,13 @@
 
 import argparse
 import logging
-import os
 from concurrent.futures import ProcessPoolExecutor as Pool
 from pathlib import Path
-from typing import Optional
 
 import lhotse
 import torch
 from feature import TorchAudioFbank, TorchAudioFbankConfig
-from lhotse import (
-    CutSet,
-    LilcomChunkyWriter,
-    load_manifest_lazy,
-    set_audio_duration_mismatch_tolerance,
-)
+from lhotse import CutSet, LilcomChunkyWriter, load_manifest_lazy
 
 # Torch's multithreaded behavior needs to be disabled or
 # it wastes a lot of CPU and slow things down.
@@ -67,7 +60,7 @@ def get_args():
         "--sampling-rate",
         type=int,
         default=24000,
-        help="The target sampling rate, the audio will be resampled to this sampling_rate.",
+        help="The target sampling rate, the audio will be resampled to it.",
     )
 
     parser.add_argument(
@@ -157,7 +150,6 @@ def compute_fbank_split_single(params, idx):
     lhotse.set_audio_duration_mismatch_tolerance(0.1)  # for emilia
     src_dir = Path(params.source_dir)
     output_dir = Path(params.dest_dir)
-    num_mel_bins = params.num_mel_bins
 
     if not src_dir.exists():
         logging.error(f"{src_dir} not exists")
@@ -230,7 +222,6 @@ def compute_fbank(params):
     src_dir = Path(params.source_dir)
     output_dir = Path(params.dest_dir)
     num_jobs = params.num_jobs
-    num_mel_bins = params.num_mel_bins
 
     prefix = params.dataset
     subset = params.subset
@@ -279,9 +270,7 @@ def compute_fbank(params):
 
 
 if __name__ == "__main__":
-    formatter = (
-        "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-    )
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
 
     logging.basicConfig(format=formatter, level=logging.INFO)
     args = get_args()

@@ -37,9 +37,7 @@ from transformers import pipeline
 def get_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        "--wav-path", type=str, help="path of the speech directory"
-    )
+    parser.add_argument("--wav-path", type=str, help="path of the speech directory")
     parser.add_argument(
         "--decode-path",
         type=str,
@@ -50,7 +48,8 @@ def get_parser():
         "--model-path",
         type=str,
         default=None,
-        help="path of the local hubert model, e.g., model/huggingface/hubert-large-ls960-ft",
+        help="path of the local hubert model, e.g., "
+        "model/huggingface/hubert-large-ls960-ft",
     )
     parser.add_argument(
         "--test-list",
@@ -106,9 +105,7 @@ class SpeechEvalDataset(torch.utils.data.Dataset):
     def __getitem__(self, index: int):
         wav, sampling_rate = sf.read(self.wav_paths[index])
         item = {
-            "array": librosa.resample(
-                wav, orig_sr=sampling_rate, target_sr=16000
-            ),
+            "array": librosa.resample(wav, orig_sr=sampling_rate, target_sr=16000),
             "sampling_rate": 16000,
             "reference": self.transcripts[index],
             "wav_name": self.wav_name[index],
@@ -161,18 +158,14 @@ def main(test_list, wav_path, model_path, decode_path, batch_size, device):
             transcription, text_ref
         )
         if decode_path:
-            fout.write(
-                f"{wav_name}\t{wer}\t{truth}\t{hypo}\t{inse}\t{dele}\t{subs}\n"
-            )
+            fout.write(f"{wav_name}\t{wer}\t{truth}\t{hypo}\t{inse}\t{dele}\t{subs}\n")
         wers.append(float(wer))
         inses.append(float(inse))
         deles.append(float(dele))
         subses.append(float(subs))
         word_nums += word_num
 
-    wer = round(
-        (np.sum(subses) + np.sum(deles) + np.sum(inses)) / word_nums * 100, 3
-    )
+    wer = round((np.sum(subses) + np.sum(deles) + np.sum(inses)) / word_nums * 100, 3)
     subs = round(np.mean(subses) * 100, 3)
     dele = round(np.mean(deles) * 100, 3)
     inse = round(np.mean(inses) * 100, 3)

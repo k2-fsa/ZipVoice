@@ -15,9 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import glob
 import logging
+import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -28,7 +28,6 @@ from lhotse.dataset.sampling.base import CutSampler
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
-
 from utils import AttributeDict
 
 # use duck typing for LRScheduler since we have different possibilities, see
@@ -200,9 +199,7 @@ def find_checkpoints(out_dir: Path, iteration: int = 0) -> List[str]:
     # iter_checkpoints is a list of tuples. Each tuple contains
     # two elements: (iteration_number, checkpoint-iteration_number.pt)
 
-    iter_checkpoints = sorted(
-        iter_checkpoints, reverse=True, key=lambda x: x[0]
-    )
+    iter_checkpoints = sorted(iter_checkpoints, reverse=True, key=lambda x: x[0])
     if iteration >= 0:
         ans = [ic[1] for ic in iter_checkpoints if ic[0] >= iteration]
     else:
@@ -253,13 +250,9 @@ def average_checkpoints_with_averaged_model(
     average_period = state_dict_start["average_period"]
 
     batch_idx_train_start = state_dict_start["batch_idx_train"]
-    batch_idx_train_start = (
-        batch_idx_train_start // average_period
-    ) * average_period
+    batch_idx_train_start = (batch_idx_train_start // average_period) * average_period
     batch_idx_train_end = state_dict_end["batch_idx_train"]
-    batch_idx_train_end = (
-        batch_idx_train_end // average_period
-    ) * average_period
+    batch_idx_train_end = (batch_idx_train_end // average_period) * average_period
     interval = batch_idx_train_end - batch_idx_train_start
     assert interval > 0, interval
     weight_end = batch_idx_train_end / interval
@@ -342,7 +335,7 @@ def resume_checkpoint(
     Returns:
       Return a dict containing previously saved training info.
     """
-    filename = params.exp_dir / f"epoch-{params.start_epoch-1}.pt"
+    filename = params.exp_dir / f"epoch-{params.start_epoch - 1}.pt"
 
     assert filename.is_file(), f"{filename} does not exist!"
 

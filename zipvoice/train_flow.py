@@ -41,7 +41,7 @@ import os
 from functools import partial
 from pathlib import Path
 from shutil import copyfile
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import diagnostics
 import optim
@@ -50,9 +50,9 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 from checkpoint import (
     load_checkpoint,
-    save_checkpoint,
     remove_checkpoints,
     resume_checkpoint,
+    save_checkpoint,
     save_checkpoint_with_global_batch_idx,
     update_averaged_model,
 )
@@ -71,21 +71,18 @@ from tts_datamodule import TtsDataModule
 from utils import (
     AttributeDict,
     MetricsTracker,
+    cleanup_dist,
     get_adjusted_batch_count,
+    get_env_info,
     get_parameter_groups_with_lrs,
     prepare_input,
     set_batch_count,
-    cleanup_dist,
     setup_dist,
     setup_logger,
-    get_env_info,
     str2bool,
 )
 
-
-LRSchedulerType = Union[
-    torch.optim.lr_scheduler._LRScheduler, optim.LRScheduler
-]
+LRSchedulerType = Union[torch.optim.lr_scheduler._LRScheduler, optim.LRScheduler]
 
 
 def add_model_arguments(parser: argparse.ArgumentParser):
@@ -107,29 +104,32 @@ def add_model_arguments(parser: argparse.ArgumentParser):
         "--fm-decoder-cnn-module-kernel",
         type=str,
         default="31,15,7,15,31",
-        help="Sizes of convolutional kernels in convolution modules in each encoder stack: "
-        "a single int or comma-separated list.",
+        help="Sizes of convolutional kernels in convolution modules in each encoder "
+        "stack: a single int or comma-separated list.",
     )
 
     parser.add_argument(
         "--fm-decoder-feedforward-dim",
         type=int,
         default=1536,
-        help="Feedforward dimension of the zipformer encoder layers, per stack, comma separated.",
+        help="Feedforward dimension of the zipformer encoder layers, per stack, "
+        "comma separated.",
     )
 
     parser.add_argument(
         "--fm-decoder-num-heads",
         type=int,
         default=4,
-        help="Number of attention heads in the zipformer encoder layers: a single int or comma-separated list.",
+        help="Number of attention heads in the zipformer encoder layers: a single int "
+        "or comma-separated list.",
     )
 
     parser.add_argument(
         "--fm-decoder-dim",
         type=int,
         default=512,
-        help="Embedding dimension in encoder stacks: a single int or comma-separated list.",
+        help="Embedding dimension in encoder stacks: a single int or comma-separated "
+        "list.",
     )
 
     parser.add_argument(
@@ -150,50 +150,56 @@ def add_model_arguments(parser: argparse.ArgumentParser):
         "--text-encoder-feedforward-dim",
         type=int,
         default=512,
-        help="Feedforward dimension of the zipformer encoder layers, per stack, comma separated.",
+        help="Feedforward dimension of the zipformer encoder layers, per stack, "
+        "comma separated.",
     )
 
     parser.add_argument(
         "--text-encoder-cnn-module-kernel",
         type=str,
         default="9",
-        help="Sizes of convolutional kernels in convolution modules in each encoder stack: "
-        "a single int or comma-separated list.",
+        help="Sizes of convolutional kernels in convolution modules in each encoder "
+        "stack: a single int or comma-separated list.",
     )
 
     parser.add_argument(
         "--text-encoder-num-heads",
         type=int,
         default=4,
-        help="Number of attention heads in the zipformer encoder layers: a single int or comma-separated list.",
+        help="Number of attention heads in the zipformer encoder layers: a single int "
+        "or comma-separated list.",
     )
 
     parser.add_argument(
         "--text-encoder-dim",
         type=int,
         default=192,
-        help="Embedding dimension in encoder stacks: a single int or comma-separated list.",
+        help="Embedding dimension in encoder stacks: a single int or comma-separated "
+        "list.",
     )
 
     parser.add_argument(
         "--query-head-dim",
         type=int,
         default=32,
-        help="Query/key dimension per head in encoder stacks: a single int or comma-separated list.",
+        help="Query/key dimension per head in encoder stacks: a single int or "
+        "comma-separated list.",
     )
 
     parser.add_argument(
         "--value-head-dim",
         type=int,
         default=12,
-        help="Value dimension per head in encoder stacks: a single int or comma-separated list.",
+        help="Value dimension per head in encoder stacks: a single int or "
+        "comma-separated list.",
     )
 
     parser.add_argument(
         "--pos-head-dim",
         type=int,
         default=4,
-        help="Positional-encoding dimension per head in encoder stacks: a single int or comma-separated list.",
+        help="Positional-encoding dimension per head in encoder stacks: a single int "
+        "or comma-separated list.",
     )
 
     parser.add_argument(
@@ -330,8 +336,9 @@ def get_parser():
         "--ref-duration",
         type=float,
         default=50,
-        help="Reference batch duration for purposes of adjusting batch counts for setting various "
-        "schedules inside the model",
+        help="""Reference batch duration for purposes of adjusting batch counts for"
+        setting various schedules inside the model".
+        """,
     )
 
     parser.add_argument(
@@ -517,11 +524,7 @@ def compute_fbank_loss(
         disables autograd.
     """
 
-    device = (
-        model.device
-        if isinstance(model, DDP)
-        else next(model.parameters()).device
-    )
+    device = model.device if isinstance(model, DDP) else next(model.parameters()).device
 
     batch_size, num_frames, _ = features.shape
 
@@ -602,11 +605,7 @@ def train_one_epoch(
         be set to 0.
     """
     model.train()
-    device = (
-        model.device
-        if isinstance(model, DDP)
-        else next(model.parameters()).device
-    )
+    device = model.device if isinstance(model, DDP) else next(model.parameters()).device
 
     # used to track the stats over iterations in one epoch
     tot_loss = MetricsTracker()
@@ -651,7 +650,8 @@ def train_one_epoch(
             model.train()
             logging.info(f"Epoch {params.cur_epoch}, validation: {valid_info}")
             logging.info(
-                f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated()//1000000}MB"
+                f"Maximum memory allocated so far is"
+                f"{torch.cuda.max_memory_allocated() // 1000000}MB"
             )
             if tb_writer is not None:
                 valid_info.write_summary(
@@ -750,9 +750,9 @@ def train_one_epoch(
                 rank=rank,
             )
         if params.batch_idx_train % 100 == 0 and params.use_fp16:
-            # If the grad scale was less than 1, try increasing it.    The _growth_interval
-            # of the grad scaler is configurable, but we can't configure it to have different
-            # behavior depending on the current grad scale.
+            # If the grad scale was less than 1, try increasing it. The _growth_interval
+            # of the grad scaler is configurable, but we can't configure it to have
+            # different behavior depending on the current grad scale.
             cur_grad_scale = scaler._scale.item()
 
             if cur_grad_scale < 1024.0 or (
@@ -776,14 +776,11 @@ def train_one_epoch(
 
             logging.info(
                 f"Epoch {params.cur_epoch}, batch {batch_idx}, "
-                f"global_batch_idx: {params.batch_idx_train}, batch size: {batch_size}, "
+                f"global_batch_idx: {params.batch_idx_train}, "
+                f"batch size: {batch_size}, "
                 f"loss[{loss_info}], tot_loss[{tot_loss}], "
                 f"cur_lr: {cur_lr:.2e}, "
-                + (
-                    f"grad_scale: {scaler._scale.item()}"
-                    if params.use_fp16
-                    else ""
-                )
+                + (f"grad_scale: {scaler._scale.item()}" if params.use_fp16 else "")
             )
 
             if tb_writer is not None:
@@ -793,9 +790,7 @@ def train_one_epoch(
                 loss_info.write_summary(
                     tb_writer, "train/current_", params.batch_idx_train
                 )
-                tot_loss.write_summary(
-                    tb_writer, "train/tot_", params.batch_idx_train
-                )
+                tot_loss.write_summary(tb_writer, "train/tot_", params.batch_idx_train)
                 if params.use_fp16:
                     tb_writer.add_scalar(
                         "train/grad_scale",
@@ -819,11 +814,7 @@ def compute_validation_loss(
     """Run the validation process."""
 
     model.eval()
-    device = (
-        model.device
-        if isinstance(model, DDP)
-        else next(model.parameters()).device
-    )
+    device = model.device if isinstance(model, DDP) else next(model.parameters()).device
 
     # used to summary the stats over iterations
     tot_loss = MetricsTracker()
@@ -925,9 +916,7 @@ def run(rank, world_size, args):
     model = get_model(params)
     if params.checkpoint is not None:
         logging.info(f"Loading pre-trained model from {params.checkpoint}")
-        _ = load_checkpoint(
-            filename=params.checkpoint, model=model, strict=True
-        )
+        _ = load_checkpoint(filename=params.checkpoint, model=model, strict=True)
     num_param = sum([p.numel() for p in model.parameters()])
     logging.info(f"Number of parameters : {num_param}")
 
@@ -937,9 +926,7 @@ def run(rank, world_size, args):
         model_avg = copy.deepcopy(model).to(torch.float64)
     assert params.start_epoch > 0, params.start_epoch
     if params.start_epoch > 1:
-        checkpoints = resume_checkpoint(
-            params=params, model=model, model_avg=model_avg
-        )
+        checkpoints = resume_checkpoint(params=params, model=model, model_avg=model_avg)
 
     model = model.to(device)
     if world_size > 1:

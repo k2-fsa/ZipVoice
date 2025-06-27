@@ -1,19 +1,18 @@
 <div align="center">
 
 # ZipVoice⚡
-## Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching
 
+## Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-COLOR.svg)](http://arxiv.org/abs/2506.13053)
 [![demo](https://img.shields.io/badge/GitHub-Demo%20page-orange.svg)](https://zipvoice.github.io/)
 </div>
 
-
 ## Overview
+
 ZipVoice is a high-quality zero-shot TTS model with a small model size and fast inference speed.
 
-
-### 1. Key features:
+### 1. Key features
 
 - Small and fast: only 123M parameters.
 
@@ -24,29 +23,31 @@ ZipVoice is a high-quality zero-shot TTS model with a small model size and fast 
 ### 2. Architecture
 
 <div align="center">
+
 <img src="https://zipvoice.github.io/pics/zipvoice.png" width="700" >
+
 </div>
 
 ## News
-**2025/06/16**: 🔥 ZipVoice is released.
 
+**2025/06/16**: 🔥 ZipVoice is released.
 
 ## Installation
 
-### 1. Clone the ZipVoice repository:
+### 1. Clone the ZipVoice repository
 
 ```bash
 git clone https://github.com/k2-fsa/ZipVoice.git
 ```
 
-### 2. (Optional) Create a Python virtual environment:
+### 2. (Optional) Create a Python virtual environment
 
 ```bash
 python3 -m venv zipvoice
 source zipvoice/bin/activate
 ```
 
-### 3. Install the required packages:
+### 3. Install the required packages
 
 ```bash
 pip install -r requirements.txt
@@ -57,6 +58,7 @@ pip install -r requirements.txt
 k2 is necessary for training and can speed up inference. Nevertheless, you can still use the inference mode of ZipVoice without installing k2.
 
 > **Note:**  Make sure to install the k2 version that matches your PyTorch and CUDA version. For example, if you are using pytorch 2.5.1 and CUDA 12.1, you can install k2 as follows:
+
 ```bash
 pip install k2==1.24.4.dev20250208+cuda12.1.torch2.5.1 -f https://k2-fsa.github.io/k2/cuda.html
 ```
@@ -68,7 +70,7 @@ Users in China mainland can refer to https://k2-fsa.org/zh-CN/get-started/k2/.
 
 To generate speech with our pre-trained ZipVoice or ZipVoice-Distill models, use the following commands (Required models will be downloaded from HuggingFace):
 
-### 1. Inference of a single sentence:
+### 1. Inference of a single sentence
 
 ```bash
 python3 zipvoice/zipvoice_infer.py \
@@ -82,7 +84,7 @@ python3 zipvoice/zipvoice_infer.py \
 - `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
 - If `<>` or `[]` appear in the text, strings enclosed by them will be treated as special tokens. `<>` denotes Chinese pinyin and `[]` denotes other special tags.
 
-### 2. Inference of a list of sentences:
+### 2. Inference of a list of sentences
 
 ```bash
 python3 zipvoice/zipvoice_infer.py \
@@ -145,7 +147,6 @@ See [scripts/prepare_libritts.sh](scripts/prepare_libritts.sh) for step by step 
 - Training:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/train_flow.py \
         --world-size 8 \
         --use-fp16 1 \
@@ -159,10 +160,9 @@ python3 zipvoice/train_flow.py \
         --exp-dir zipvoice/exp_zipvoice
 ```
 
--  Average the checkpoints to produce the final model:
+- Average the checkpoints to produce the final model:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/generate_averaged_model.py \
       --epoch 11 \
       --avg 4 \
@@ -178,7 +178,6 @@ python3 zipvoice/generate_averaged_model.py \
 - The first-stage distillation:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/train_distill.py \
         --world-size 8 \
         --use-fp16 1 \
@@ -197,7 +196,6 @@ python3 zipvoice/train_distill.py \
 - Average checkpoints for the second-stage initialization:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/generate_averaged_model.py \
       --iter 60000 \
       --avg 7 \
@@ -208,10 +206,9 @@ python3 zipvoice/generate_averaged_model.py \
 # The generated model is zipvoice/exp_zipvoice_distill_1stage/iter-60000-avg-7.pt
 ```
 
--  The second-stage distillation:
+- The second-stage distillation:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/train_distill.py \
         --world-size 8 \
         --use-fp16 1 \
@@ -226,8 +223,8 @@ python3 zipvoice/train_distill.py \
         --distill-stage "second" \
         --exp-dir zipvoice/exp_zipvoice_distill_new
 ```
-</details>
 
+</details>
 
 #### 2.2 Traininig on LibriTTS
 
@@ -239,7 +236,6 @@ python3 zipvoice/train_distill.py \
 - Training:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/train_flow.py \
         --world-size 8 \
         --use-fp16 1 \
@@ -257,7 +253,6 @@ python3 zipvoice/train_flow.py \
 - Average the checkpoints to produce the final model:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/generate_averaged_model.py \
       --epoch 60 \
       --avg 10 \
@@ -273,7 +268,6 @@ python3 zipvoice/generate_averaged_model.py \
 - The first-stage distillation:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/train_distill.py \
         --world-size 8 \
         --use-fp16 1 \
@@ -292,7 +286,6 @@ python3 zipvoice/train_distill.py \
 - Average checkpoints for the second-stage initialization:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 ./zipvoice/generate_averaged_model.py \
       --epoch 6 \
       --avg 3 \
@@ -306,7 +299,6 @@ python3 ./zipvoice/generate_averaged_model.py \
 - The second-stage distillation:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/train_distill.py \
         --world-size 8 \
         --use-fp16 1 \
@@ -325,7 +317,6 @@ python3 zipvoice/train_distill.py \
 - Average checkpoints to produce the final model:
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 ./zipvoice/generate_averaged_model.py \
       --epoch 6 \
       --avg 3 \
@@ -335,18 +326,19 @@ python3 ./zipvoice/generate_averaged_model.py \
       --exp-dir ./zipvoice/exp_zipvoice_distill_libritts
 # The generated model is ./zipvoice/exp_zipvoice_distill_libritts/epoch-6-avg-3.pt
 ```
-</details>
 
+</details>
 
 ### 3. Inference with the trained model
 
 #### 3.1 Inference with the model trained on Emilia
+
 <details>
 <summary>Expand to view inference commands.</summary>
 
-##### 3.1.1 ZipVoice model before distill:
+##### 3.1.1 ZipVoice model before distill
+
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/infer.py \
       --checkpoint zipvoice/exp_zipvoice/epoch-11-avg-4.pt \
       --distill 0 \
@@ -357,9 +349,9 @@ python3 zipvoice/infer.py \
       --guidance-scale 1
 ```
 
-##### 3.1.2 ZipVoice-Distill model before distill:
+##### 3.1.2 ZipVoice-Distill model
+
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/infer.py \
       --checkpoint zipvoice/exp_zipvoice_distill/checkpoint-2000.pt \
       --distill 1 \
@@ -369,17 +361,17 @@ python3 zipvoice/infer.py \
       --num-step 8 \
       --guidance-scale 3
 ```
-</details>
 
+</details>
 
 #### 3.2 Inference with the model trained on LibriTTS
 
 <details>
 <summary>Expand to view inference commands.</summary>
 
-##### 3.2.1 ZipVoice model before distill:
+##### 3.2.1 ZipVoice model before distill
+
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/infer.py \
       --checkpoint zipvoice/exp_zipvoice_libritts/epoch-60-avg-10.pt \
       --distill 0 \
@@ -392,10 +384,9 @@ python3 zipvoice/infer.py \
       --t-shift 0.7
 ```
 
-##### 3.2.2 ZipVoice-Distill model before distill
+##### 3.2.2 ZipVoice-Distill model
 
 ```bash
-export PYTHONPATH=../../:$PYTHONPATH
 python3 zipvoice/infer.py \
       --checkpoint zipvoice/exp_zipvoice_distill/epoch-6-avg-3.pt \
       --distill 1 \
@@ -407,13 +398,13 @@ python3 zipvoice/infer.py \
       --target-rms 1.0 \
       --t-shift 0.7
 ```
+
 </details>
 
 ### 4. Evaluation on benchmarks
 
 See [local/evaluate.sh](local/evaluate.sh) for details of objective metrics evaluation
 on three test sets, i.e., LibriSpeech-PC test-clean, Seed-TTS test-en and Seed-TTS test-zh.
-
 
 ## Discussion & Communication
 
@@ -424,7 +415,6 @@ You can also scan the QR code to join our wechat group or follow our wechat offi
 | Wechat Group | Wechat Official Account |
 | ------------ | ----------------------- |
 |![wechat](https://k2-fsa.org/zh-CN/assets/pic/wechat_group.jpg) |![wechat](https://k2-fsa.org/zh-CN/assets/pic/wechat_account.jpg) |
-
 
 ## Citation
 

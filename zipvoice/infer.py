@@ -19,7 +19,8 @@
 """
 This script loads checkpoints to generate waveforms.
 This script is supposed to be used with the model trained by yourself.
-If you want to use the pre-trained checkpoints provided by us, please refer to zipvoice_infer.py.
+If you want to use the pre-trained checkpoints provided by us, please refer to
+zipvoice_infer.py.
 
 (1) Usage with a pre-trained checkpoint:
 
@@ -82,19 +83,18 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchaudio
-from checkpoint import load_checkpoint
+from checkpoint import (
+    average_checkpoints_with_averaged_model,
+    find_checkpoints,
+    load_checkpoint,
+)
 from feature import TorchAudioFbank, TorchAudioFbankConfig
 from lhotse.utils import fix_random_seed
 from model import get_distill_model, get_model
 from tokenizer import EmiliaTokenizer, LibriTTSTokenizer
 from train_flow import add_model_arguments, get_params
-from vocos import Vocos
-
-from checkpoint import (
-    average_checkpoints_with_averaged_model,
-    find_checkpoints,
-)
 from utils import AttributeDict, setup_logger, str2bool
+from vocos import Vocos
 
 
 def get_parser():
@@ -322,9 +322,7 @@ def generate_sentence(
         prompt_wav, sampling_rate=sampling_rate
     ).to(device)
     prompt_features = prompt_features.unsqueeze(0) * feat_scale
-    prompt_features_lens = torch.tensor(
-        [prompt_features.size(1)], device=device
-    )
+    prompt_features_lens = torch.tensor([prompt_features.size(1)], device=device)
 
     # Start timing
     start_t = dt.datetime.now()
@@ -429,14 +427,14 @@ def generate(
         total_t_vocoder.append(metrics["t_vocoder"])
         total_wav_seconds.append(metrics["wav_seconds"])
 
-    print(f"Average RTF: " f"{np.sum(total_t)/np.sum(total_wav_seconds):.4f}")
+    print(f"Average RTF: " f"{np.sum(total_t) / np.sum(total_wav_seconds):.4f}")
     print(
         f"Average RTF w/o vocoder: "
-        f"{np.sum(total_t_no_vocoder)/np.sum(total_wav_seconds):.4f}"
+        f"{np.sum(total_t_no_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
     print(
         f"Average RTF vocoder: "
-        f"{np.sum(total_t_vocoder)/np.sum(total_wav_seconds):.4f}"
+        f"{np.sum(total_t_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
 
 
@@ -511,9 +509,9 @@ def main():
                 )
         else:
             if params.iter > 0:
-                filenames = find_checkpoints(
-                    params.exp_dir, iteration=-params.iter
-                )[: params.avg + 1]
+                filenames = find_checkpoints(params.exp_dir, iteration=-params.iter)[
+                    : params.avg + 1
+                ]
                 if len(filenames) == 0:
                     raise ValueError(
                         f"No checkpoints found for"

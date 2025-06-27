@@ -79,13 +79,9 @@ class SpeakerSimilarity:
         self.sample_rate = 16000
         self.channels = 1
         self.device = (
-            torch.device("cuda")
-            if torch.cuda.is_available()
-            else torch.device("cpu")
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
-        logging.info(
-            "[Speaker Similarity] Using device: {}".format(self.device)
-        )
+        logging.info("[Speaker Similarity] Using device: {}".format(self.device))
         self.model = ECAPA_TDNN_WAVLLM(
             feat_dim=1024,
             channels=512,
@@ -150,9 +146,7 @@ class SpeakerSimilarity:
         with open(test_list, "r") as fr:
             lines = fr.readlines()
             for line in lines:
-                wav_name, prompt_text, prompt_wav, text = line.strip().split(
-                    "\t"
-                )
+                wav_name, prompt_text, prompt_wav, text = line.strip().split("\t")
                 prompt_wavs.append(prompt_wav)
                 eval_wavs.append(os.path.join(eval_path, wav_name + ".wav"))
         embds_prompt = self.get_embeddings(prompt_wavs, dtype=dtype)
@@ -161,22 +155,16 @@ class SpeakerSimilarity:
 
         # Check if embeddings are empty
         if len(embds_prompt) == 0:
-            logging.info(
-                "[Speaker Similarity] real set dir is empty, exiting..."
-            )
+            logging.info("[Speaker Similarity] real set dir is empty, exiting...")
             return -1
         if len(embds_eval) == 0:
-            logging.info(
-                "[Speaker Similarity] eval set dir is empty, exiting..."
-            )
+            logging.info("[Speaker Similarity] eval set dir is empty, exiting...")
             return -1
 
         scores = []
         for real_embd, eval_embd in zip(embds_prompt, embds_eval):
             scores.append(
-                torch.nn.functional.cosine_similarity(
-                    real_embd, eval_embd, dim=-1
-                )
+                torch.nn.functional.cosine_similarity(real_embd, eval_embd, dim=-1)
                 .detach()
                 .cpu()
                 .numpy()
@@ -362,9 +350,7 @@ class SE_Res2Block(nn.Module):
 
 
 class AttentiveStatsPool(nn.Module):
-    def __init__(
-        self, in_dim, attention_channels=128, global_context_att=False
-    ):
+    def __init__(self, in_dim, attention_channels=128, global_context_att=False):
         super().__init__()
         self.global_context_att = global_context_att
 
@@ -430,16 +416,16 @@ class ECAPA_TDNN_WAVLLM(nn.Module):
             self.feature_extract.model.encoder.layers[23].self_attn,
             "fp32_attention",
         ):
-            self.feature_extract.model.encoder.layers[
-                23
-            ].self_attn.fp32_attention = False
+            self.feature_extract.model.encoder.layers[23].self_attn.fp32_attention = (
+                False
+            )
         if len(self.feature_extract.model.encoder.layers) == 24 and hasattr(
             self.feature_extract.model.encoder.layers[11].self_attn,
             "fp32_attention",
         ):
-            self.feature_extract.model.encoder.layers[
-                11
-            ].self_attn.fp32_attention = False
+            self.feature_extract.model.encoder.layers[11].self_attn.fp32_attention = (
+                False
+            )
 
         self.feat_num = self.get_feat_num()
         self.feature_weight = nn.Parameter(torch.zeros(self.feat_num))
@@ -448,9 +434,7 @@ class ECAPA_TDNN_WAVLLM(nn.Module):
         # self.channels = [channels] * 4 + [channels * 3]
         self.channels = [channels] * 4 + [1536]
 
-        self.layer1 = Conv1dReluBn(
-            feat_dim, self.channels[0], kernel_size=5, padding=2
-        )
+        self.layer1 = Conv1dReluBn(feat_dim, self.channels[0], kernel_size=5, padding=2)
         self.layer2 = SE_Res2Block(
             self.channels[0],
             self.channels[1],
@@ -495,11 +479,7 @@ class ECAPA_TDNN_WAVLLM(nn.Module):
 
     def get_feat_num(self):
         self.feature_extract.eval()
-        wav = [
-            torch.randn(self.sr).to(
-                next(self.feature_extract.parameters()).device
-            )
-        ]
+        wav = [torch.randn(self.sr).to(next(self.feature_extract.parameters()).device)]
         with torch.no_grad():
             features = self.feature_extract(wav)
         select_feature = features["hidden_states"]
