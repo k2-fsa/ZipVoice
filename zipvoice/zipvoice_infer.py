@@ -436,6 +436,8 @@ def main():
 
     if torch.cuda.is_available():
         params.device = torch.device("cuda", 0)
+    elif torch.backends.mps.is_available():
+        params.device = torch.device("mps")
     else:
         params.device = torch.device("cpu")
 
