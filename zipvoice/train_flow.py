@@ -60,7 +60,7 @@ from hooks import register_inf_check_hooks
 from lhotse.cut import Cut, CutSet
 from lhotse.utils import fix_random_seed
 from model import get_model
-from optim import Eden, ScaledAdam
+from optim import Eden, FixedLRScheduler, ScaledAdam
 from tokenizer import EmiliaTokenizer, LibriTTSTokenizer
 from torch import Tensor
 from torch.amp import GradScaler, autocast
@@ -339,6 +339,14 @@ def get_parser():
         help="""Reference batch duration for purposes of adjusting batch counts for"
         setting various schedules inside the model".
         """,
+    )
+
+    parser.add_argument(
+        "--finetune",
+        type=str2bool,
+        default=False,
+        help="Whether to use the fine-tuning mode, will used a fixed learning rate "
+        "schedule and skip the large dropout phase.",
     )
 
     parser.add_argument(
@@ -628,7 +636,10 @@ def train_one_epoch(
     for batch_idx, batch in enumerate(train_dl):
 
         if batch_idx % 10 == 0:
-            set_batch_count(model, get_adjusted_batch_count(params))
+            if params.finetune:
+                set_batch_count(model, get_adjusted_batch_count(params) + 100000)
+            else:
+                set_batch_count(model, get_adjusted_batch_count(params))
 
         if (
             params.valid_interval is None
@@ -944,7 +955,10 @@ def run(rank, world_size, args):
     )
 
     assert params.lr_hours >= 0
-    if params.lr_hours > 0:
+
+    if params.finetune:
+        scheduler = FixedLRScheduler(optimizer)
+    elif params.lr_hours > 0:
         scheduler = Eden(optimizer, params.lr_batches, params.lr_hours)
     else:
         scheduler = Eden(optimizer, params.lr_batches, params.lr_epochs)
