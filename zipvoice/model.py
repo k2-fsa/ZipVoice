@@ -329,10 +329,16 @@ class TtsModel(nn.Module):
             device=device,
         )
 
+        tokens_lens = torch.tensor(
+            [len(token) for token in tokens],
+            dtype=torch.int64,
+            device=device,
+        )
+
         cat_embed, cat_tokens_lens = self.forward_text_embed(cat_tokens)
 
-        features_lens = torch.ceil(
-            (prompt_features_lens / prompt_tokens_lens * cat_tokens_lens / speed)
+        features_lens = prompt_features_lens + torch.ceil(
+            (prompt_features_lens / prompt_tokens_lens * tokens_lens / speed)
         ).to(dtype=torch.int64)
 
         text_condition, padding_mask = self.forward_text_condition(
