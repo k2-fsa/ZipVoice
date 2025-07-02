@@ -16,7 +16,7 @@
 # limitations under the License.
 """
 This script generates speech with our pre-trained ZipVoice or ZipVoice-Distill
-    ONNX models. We assume you have exported ONNX models using zipvoice/onnx_export.py
+    ONNX models. Required models will be automatically downloaded from HuggingFace.
 
 Usage:
 
@@ -28,7 +28,6 @@ export HF_ENDPOINT=https://hf-mirror.com
 (1) Inference of a single sentence:
 
 python3 zipvoice/zipvoice_infer_onnx.py \
-    --onnx-model-dir onnx_zipvoice \
     --onnx-int8 False \
     --model-name "zipvoice" \
     --prompt-wav prompt.wav \
@@ -38,7 +37,6 @@ python3 zipvoice/zipvoice_infer_onnx.py \
 
 (2) Inference of a list of sentences:
 python3 zipvoice/zipvoice_infer_onnx.py \
-    --onnx-model-dir onnx_zipvoice \
     --onnx-int8 False \
     --model-name "zipvoice" \
     --test-list test.tsv \
@@ -79,13 +77,6 @@ from zipvoice_infer import get_vocoder
 def get_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-
-    parser.add_argument(
-        "--onnx-model-dir",
-        type=str,
-        default="exp",
-        help="Dir to the exported models",
     )
 
     parser.add_argument(
@@ -574,12 +565,21 @@ def main():
     params.pad_id = tokenizer.pad_id
     fix_random_seed(params.seed)
 
-    if not params.onnx_int8:
-        text_model_path = f"{params.onnx_model_dir}/text_model.onnx"
-        flow_matching_model_path = f"{params.onnx_model_dir}/flow_matching_model.onnx"
+    if params.model_name == "zipvoice_distill":
+        dirname = "exp_zipvoice_distill"
     else:
-        text_model_path = f"{params.onnx_model_dir}/text_model_int8.onnx"
-        flow_matching_model_path = f"{params.onnx_model_dir}/flow_matching_model_int8.onnx"
+        dirname = "exp_zipvoice"
+
+    if not params.onnx_int8:
+        text_model_path = f"{dirname}/text_model.onnx"
+        flow_matching_model_path = f"{dirname}/flow_matching_model.onnx"
+    else:
+        text_model_path = f"{dirname}/text_model_int8.onnx"
+        flow_matching_model_path = f"{dirname}/flow_matching_model_int8.onnx"
+
+    repo_id = "zhu-han/ZipVoice"
+    text_model_path = hf_hub_download(repo_id, filename=text_model_path)
+    flow_matching_model_path = hf_hub_download(repo_id, filename=flow_matching_model_path)
 
     model = OnnxModel(text_model_path, flow_matching_model_path)
 

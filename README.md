@@ -95,6 +95,8 @@ python3 zipvoice/zipvoice_infer.py \
 
 - Each line of `test.tsv` is in the format of `{wav_name}\t{prompt_transcription}\t{prompt_wav}\t{text}`.
 
+> Could run ONNX models for faster inference on CPU with `zipvoice/zipvoice_infer_onnx.py`.
+
 > **Note:** If you have trouble connecting to HuggingFace, try:
 > ```bash
 > export HF_ENDPOINT=https://hf-mirror.com
