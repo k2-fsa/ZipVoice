@@ -577,9 +577,12 @@ def main():
         text_model_path = f"{dirname}/text_model_int8.onnx"
         flow_matching_model_path = f"{dirname}/flow_matching_model_int8.onnx"
 
-    repo_id = "zhu-han/ZipVoice"
-    text_model_path = hf_hub_download(repo_id, filename=text_model_path)
-    flow_matching_model_path = hf_hub_download(repo_id, filename=flow_matching_model_path)
+    text_model_path = hf_hub_download(
+        "zhu-han/ZipVoice", filename=text_model_path
+    )
+    flow_matching_model_path = hf_hub_download(
+        "zhu-han/ZipVoice", filename=flow_matching_model_path
+    )
 
     model = OnnxModel(text_model_path, flow_matching_model_path)
 
