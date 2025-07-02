@@ -1,4 +1,5 @@
-# Copyright         2025  Xiaomi Corp.        (authors: Zengwei Yao)
+# Copyright         2025  Xiaomi Corp.        (authors: Han Zhu,
+#                                                       Zengwei Yao)
 #
 # See ../../../../LICENSE for clarification regarding multiple authors
 #
