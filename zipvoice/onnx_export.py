@@ -170,11 +170,14 @@ class OnnxFlowMatchingModel(nn.Module):
             text_condition = torch.cat(
                 [torch.zeros_like(text_condition), text_condition], dim=0
             )
-            m = (t <= 0.5).float()
             speech_condition = torch.cat(
-                [speech_condition, speech_condition], dim=0
+                [
+                    torch.where(t > 0.5, torch.zeros_like(speech_condition), speech_condition),
+                    speech_condition
+                ],
+                dim=0
             )
-            guidance_scale = guidance_scale * (m + 1)
+            guidance_scale = torch.where(t > 0.5, guidance_scale, guidance_scale * 2.0)
             data_uncond, data_cond = self.model_func(
                 t=t,
                 xt=x,
