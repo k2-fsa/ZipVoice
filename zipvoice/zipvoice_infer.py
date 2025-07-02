@@ -182,32 +182,6 @@ def get_parser():
     return parser
 
 
-class MelSpectrogramFeatures(torch.nn.Module):
-    def __init__(
-        self,
-        sampling_rate=24000,
-        n_mels=100,
-        n_fft=1024,
-        hop_length=256,
-    ):
-        super().__init__()
-
-        self.mel_spec = torchaudio.transforms.MelSpectrogram(
-            sample_rate=sampling_rate,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            n_mels=n_mels,
-            center=True,
-            power=1,
-        )
-
-    def forward(self, inp):
-        assert len(inp.shape) == 2
-        mel = self.mel_spec(inp)
-        logmel = mel.clamp(min=1e-7).log()
-        return logmel
-
-
 def get_vocoder():
     vocoder = Vocos.from_pretrained("charactr/vocos-mel-24khz")
     return vocoder

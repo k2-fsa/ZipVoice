@@ -104,6 +104,11 @@ class TorchAudioFbank(FeatureExtractor):
 
         if len(samples.shape) == 1:
             samples = samples.unsqueeze(0)
+        else:
+            assert samples.ndim == 2, samples.shape
+            if samples.shape[0] == 2:
+                samples = samples.mean(dim=0, keepdim=True)
+
         assert samples.ndim == 2, samples.shape
         assert samples.shape[0] == 1, samples.shape
 
