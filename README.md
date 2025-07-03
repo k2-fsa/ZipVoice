@@ -373,6 +373,8 @@ python3 zipvoice/infer.py \
 
 ```bash
 python3 zipvoice/infer.py \
+      --dataset libritts \
+      --token-type char \
       --checkpoint zipvoice/exp_zipvoice_libritts/epoch-60-avg-10.pt \
       --distill 0 \
       --token-file "data/tokens_libritts.txt" \
@@ -388,6 +390,8 @@ python3 zipvoice/infer.py \
 
 ```bash
 python3 zipvoice/infer.py \
+      --dataset libritts \
+      --token-type char \
       --checkpoint zipvoice/exp_zipvoice_distill/epoch-6-avg-3.pt \
       --distill 1 \
       --token-file "data/tokens_libritts.txt" \
