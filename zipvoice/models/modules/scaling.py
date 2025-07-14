@@ -24,10 +24,10 @@ from typing import Optional, Tuple, Union
 
 try:
     import k2
-except ImportError as e:
+except Exception as e:
     logging.warning(
-        "k2 is not installed correctly. Swoosh functions will fallback to "
-        "PyTorch implementation, leading to slower speed and higher memory consumption."
+        f"Failed import k2 with error {e}. Swoosh functions will fallback to PyTorch"
+        f" implementation, leading to slower speed and higher memory consumption."
     )
 import torch
 import torch.nn as nn
@@ -657,7 +657,8 @@ class Balancer(torch.nn.Module):
 
                 def _approx_inverse_erf(x):
                     # 1 / (sqrt(pi) * ln(2)),
-                    # see https://math.stackexchange.com/questions/321569/approximating-the-error-function-erf-by-analytical-functions
+                    # see https://math.stackexchange.com/questions/321569/
+                    # approximating-the-error-function-erf-by-analytical-functions
                     # this approximation is extremely crude and gets progressively worse
                     # for x very close to -1 or +1, but we mostly care about the
                     # "middle" region
@@ -738,11 +739,12 @@ def _diag(x: Tensor):  # like .diag(), but works for tensors with 3 dims.
 def _whitening_metric(x: Tensor, num_groups: int):
     """
     Computes the "whitening metric", a value which will be 1.0 if all the eigenvalues of
-    of the centered feature covariance are the same within each group's covariance matrix
-    and also between groups.
+        of the centered feature covariance are the same within each group's covariance
+        matrix and also between groups.
     Args:
         x: a Tensor of shape (*, num_channels)
-     num_groups:  the number of groups of channels, a number >=1 that divides num_channels
+     num_groups:  the number of groups of channels, a number >=1 that divides
+        num_channels
     Returns:
         Returns a scalar Tensor that will be 1.0 if the data is "perfectly white" and
     greater than 1.0 otherwise.
@@ -793,8 +795,10 @@ class WhiteningPenaltyFunction(torch.autograd.Function):
 
                     if random.random() < 0.005 or __name__ == "__main__":
                         logging.debug(
-                            f"Whitening: name={w.name}, num_groups={w.num_groups}, num_channels={x_orig.shape[-1]}, "
-                            f"metric={metric.item():.2f} vs. limit={float(w.whitening_limit)}"
+                            f"Whitening: name={w.name}, num_groups={w.num_groups},"
+                            f"num_channels={x_orig.shape[-1]}, "
+                            f"metric={metric.item():.2f}"
+                            f" vs. limit={float(w.whitening_limit)}"
                         )
 
                     if metric < float(w.whitening_limit):
@@ -812,7 +816,8 @@ class WhiteningPenaltyFunction(torch.autograd.Function):
                         return x_grad + penalty_grad.to(x_grad.dtype), None
         except Exception as e:
             logging.info(
-                f"Caught exception in Whiten backward: {e}, size={list(x_grad.shape)}, will continue."
+                f"Caught exception in Whiten backward: {e}, "
+                f"size={list(x_grad.shape)}, will continue."
             )
         return x_grad, None
 
@@ -960,7 +965,8 @@ class Identity(torch.nn.Module):
         return _no_op(x)
 
 
-# Dropout2 is just like normal dropout, except it supports schedules on the dropout rates.
+# Dropout2 is just like normal dropout, except it supports schedules
+# on the dropout rates.
 class Dropout2(nn.Module):
     def __init__(self, p: FloatLike):
         super().__init__()
@@ -990,8 +996,8 @@ class MulForDropout3(torch.autograd.Function):
         return x_grad, None, None
 
 
-# Dropout3 is just like normal dropout, except it supports schedules on the dropout rates,
-# and it lets you choose one dimension to share the dropout mask over
+# Dropout3 is just like normal dropout, except it supports schedules on the dropout
+# rates, and it lets you choose one dimension to share the dropout mask over
 class Dropout3(nn.Module):
     def __init__(self, p: FloatLike, shared_dim: int):
         super().__init__()
@@ -1412,6 +1418,7 @@ def _test_swooshl_deriv():
     x = torch.randn(1000, 1000, dtype=torch.double) * 3.0
     x.requires_grad = True
     y = m(x)
+    return y
 
 
 def _test_swooshr_deriv():
@@ -1426,6 +1433,7 @@ def _test_swooshr_deriv():
     x = torch.randn(1000, 1000, dtype=torch.double) * 3.0
     x.requires_grad = True
     y = m(x)
+    return y
 
 
 def _test_softmax():

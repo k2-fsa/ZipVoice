@@ -89,10 +89,10 @@ def register_inf_check_hooks(model: nn.Module) -> None:
 
         try:
             parameter.register_hook(param_backward_hook)
-        except:
+        except Exception as e:
             logging.warning(
-                f"Warning: could not register backward hook for parameter {name}, "
-                f"it might not be differentiable."
+                f"Warning: could not register backward hook for parameter {name}"
+                f" with error {e}, it might not be differentiable."
             )
 
 

@@ -29,7 +29,7 @@ from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 
-from zipvoice.utils.utils import AttributeDict
+from zipvoice.utils.common import AttributeDict
 
 # use duck typing for LRScheduler since we have different possibilities, see
 # our class LRScheduler.
