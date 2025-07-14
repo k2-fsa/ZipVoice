@@ -75,7 +75,7 @@ from zipvoice.utils.checkpoint import load_checkpoint
 from zipvoice.utils.common import AttributeDict
 from zipvoice.utils.feature import VocosFbank
 
-HUGGINGFACE_REPO = "zhu-han/ZipVoice"
+HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
 PRETRAINED_MODEL = {
     "zipvoice": "zipvoice/model.pt",
     "zipvoice_distill": "zipvoice_distill/model.pt",

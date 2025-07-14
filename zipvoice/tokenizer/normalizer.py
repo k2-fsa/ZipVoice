@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 
 import cn2an
 import inflect
-from unidecode import unidecode
 
 
 class TextNormalizer(ABC):

@@ -26,11 +26,7 @@ import jieba
 from pypinyin import Style, lazy_pinyin
 from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
 
-from zipvoice.tokenizer.normalizer import (
-    ChineseTextNormalizer,
-    EnglishTextNormalizer,
-    LibriTTSEnglishTextNormalizer,
-)
+from zipvoice.tokenizer.normalizer import ChineseTextNormalizer, EnglishTextNormalizer
 
 try:
     from piper_phonemize import phonemize_espeak

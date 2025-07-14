@@ -542,8 +542,7 @@ def train_one_epoch(
                 set_batch_count(model, get_adjusted_batch_count(params))
 
         if (
-            params.valid_interval is not None
-            and params.batch_idx_train > 0
+            params.batch_idx_train > 0
             and params.batch_idx_train % params.valid_interval == 0
             and not params.print_diagnostics
         ):
@@ -555,7 +554,10 @@ def train_one_epoch(
                 world_size=world_size,
             )
             model.train()
-            logging.info(f"Epoch {params.cur_epoch}, validation: {valid_info}")
+            logging.info(
+                f"Epoch {params.cur_epoch}, global_batch_idx: {params.batch_idx_train},"
+                f" validation: {valid_info}"
+            )
             logging.info(
                 f"Maximum memory allocated so far is "
                 f"{torch.cuda.max_memory_allocated() // 1000000}MB"

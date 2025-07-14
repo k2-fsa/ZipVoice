@@ -76,7 +76,7 @@ from zipvoice.tokenizer.tokenizer import (
 from zipvoice.utils.common import AttributeDict, str2bool
 from zipvoice.utils.feature import VocosFbank
 
-HUGGINGFACE_REPO = "zhu-han/ZipVoice"
+HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
 TOKEN_FILE = {
     "zipvoice": "zipvoice/tokens.txt",
     "zipvoice_distill": "zipvoice_distill/tokens.txt",
