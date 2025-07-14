@@ -1,0 +1,26 @@
+{
+  "model" : {
+    "fm_decoder_downsampling_factor" : [1,2,4,2,1],
+    "fm_decoder_num_layers" : [2,2,4,4,4],
+    "fm_decoder_cnn_module_kernel" : [31,15,7,15,31],
+    "fm_decoder_feedforward_dim" : 1536,
+    "fm_decoder_num_heads" : 4,
+    "fm_decoder_dim" : 512,
+    "text_encoder_num_layers" : 4,
+    "text_encoder_feedforward_dim" : 512,
+    "text_encoder_cnn_module_kernel" : 9,
+    "text_encoder_num_heads" : 4,
+    "text_encoder_dim" : 192,
+    "query_head_dim" : 32,
+    "value_head_dim" : 12,
+    "pos_head_dim" : 4,
+    "pos_dim" : 48,
+    "time_embed_dim" : 192,
+    "text_embed_dim" : 192,
+    "feat_dim": 100
+  },
+  "feature" : {
+    "sampling_rate": 24000,
+    "type": "vocos"
+  }
+}
