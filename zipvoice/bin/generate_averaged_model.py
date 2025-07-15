@@ -104,7 +104,7 @@ def get_parser():
     parser.add_argument(
         "--model-config",
         type=str,
-        default="zipvoice_base.json",
+        default="conf/zipvoice_base.json",
         help="The model configuration file.",
     )
 

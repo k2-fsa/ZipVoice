@@ -85,7 +85,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
       # export HF_ENDPOINT=https://hf-mirror.com
       hf_repo=k2-fsa/ZipVoice
       mkdir -p ${download_dir}
-      for file in model.pt tokens.txt zipvoice_base.json; do
+      for file in model.pt tokens.txt model.json; do
             huggingface-cli download \
                   --local-dir ${download_dir} \
                   ${hf_repo} \
@@ -115,7 +115,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
             --save-every-n 1000 \
             --max-duration 500 \
             --max-len ${max_len} \
-            --model-config download/zipvoice/zipvoice_base.json \
+            --model-config download/zipvoice/model.json \
             --checkpoint download/zipvoice/model.pt \
             --tokenizer ${tokenizer} \
             --lang ${lang} \
@@ -133,7 +133,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --iter 10000 \
             --avg 2 \
             --model-name zipvoice \
-            --model-config download/zipvoice/zipvoice_base.json \
+            --model-config download/zipvoice/model.json \
             --token-file download/zipvoice/tokens.txt \
             --exp-dir exp/zipvoice_finetune
       # The generated model is exp/zipvoice_finetune/iter-10000-avg-2.pt
@@ -154,7 +154,7 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
       python3 -m zipvoice.bin.infer_zipvoice \
             --model-name zipvoice \
             --checkpoint exp/zipvoice_finetune/iter-10000-avg-2.pt \
-            --model-config download/zipvoice/zipvoice_base.json \
+            --model-config download/zipvoice/model.json \
             --tokenizer ${tokenizer} \
             --lang ${lang} \
             --token-file download/zipvoice/tokens.txt \

@@ -71,8 +71,8 @@ TOKEN_FILE = {
     "zipvoice_dialog_stereo": "zipvoice_dialog_stereo/tokens.txt",
 }
 MODEL_CONFIG = {
-    "zipvoice_dialog": "zipvoice_dialog/zipvoice_base.json",
-    "zipvoice_dialog_stereo": "zipvoice_dialog_stereo/zipvoice_base.json",
+    "zipvoice_dialog": "zipvoice_dialog/model.json",
+    "zipvoice_dialog_stereo": "zipvoice_dialog_stereo/model.json",
 }
 
 
@@ -102,7 +102,7 @@ def get_parser():
         type=str,
         default=None,
         help="The model configuration file. "
-        "Will download zipvoice_base.json from huggingface if not specified.",
+        "Will download model.json from huggingface if not specified.",
     )
 
     parser.add_argument(

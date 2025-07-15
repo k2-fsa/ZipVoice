@@ -77,24 +77,21 @@ def get_parser():
         type=str,
         default="data/tokens_emilia.txt",
         help="The file that contains information that maps tokens to ids,"
-        "which is a text file with '{token}\t{token_id}' per line. "
-        "Will download tokens_emilia.txt from huggingface if not specified.",
+        "which is a text file with '{token}\t{token_id}' per line.",
     )
 
     parser.add_argument(
         "--checkpoint",
         type=str,
         default="exp_zipvoice/epoch-11-avg-4.pt",
-        help="The model checkpoint. "
-        "Will download pre-trained checkpoint from huggingface if not specified.",
+        help="The model checkpoint.",
     )
 
     parser.add_argument(
         "--model-config",
         type=str,
-        default="zipvoice_base.json",
-        help="The model configuration file. "
-        "Will download zipvoice_base.json from huggingface if not specified.",
+        default="conf/zipvoice_base.json",
+        help="The model configuration file.",
     )
 
     return parser

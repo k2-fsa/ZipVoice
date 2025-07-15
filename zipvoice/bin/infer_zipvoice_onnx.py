@@ -82,8 +82,8 @@ TOKEN_FILE = {
     "zipvoice_distill": "zipvoice_distill/tokens.txt",
 }
 MODEL_CONFIG = {
-    "zipvoice": "zipvoice/zipvoice_base.json",
-    "zipvoice_distill": "zipvoice_distill/zipvoice_base.json",
+    "zipvoice": "zipvoice/model.json",
+    "zipvoice_distill": "zipvoice_distill/model.json",
 }
 
 
@@ -120,7 +120,7 @@ def get_parser():
         type=str,
         default=None,
         help="The model configuration file. "
-        "Will download zipvoice_base.json from huggingface if not specified.",
+        "Will download model.json from huggingface if not specified.",
     )
 
     parser.add_argument(
