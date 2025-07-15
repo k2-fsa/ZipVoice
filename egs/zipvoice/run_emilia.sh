@@ -36,7 +36,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
             --num-epochs 11 \
             --max-duration 500 \
             --lr-hours 30000 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer emilia \
             --token-file "data/tokens_emilia.txt" \
             --dataset emilia \
@@ -50,7 +50,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
             --epoch 11 \
             --avg 4 \
             --distill 0 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --token-file data/tokens_emilia.txt \
             --exp-dir exp/zipvoice
       # The generated model is exp/zipvoice/epoch-11-avg-4.pt
@@ -82,7 +82,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --iter 60000 \
             --avg 7 \
             --distill 1 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --token-file data/tokens_emilia.txt \
             --exp-dir exp/zipvoice_distill_1stage
       # The generated model is exp/zipvoice_distill_1stage/iter-60000-avg-7.pt
@@ -98,7 +98,7 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
             --save-every-n 1000 \
             --max-duration 500 \
             --base-lr 0.0001 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer emilia \
             --token-file data/tokens_emilia.txt \
             --dataset emilia \
@@ -116,7 +116,7 @@ if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
             --model-name zipvoice \
             --token-file data/tokens_emilia.txt \
             --checkpoint exp/zipvoice/epoch-11-avg-4.pt \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --onnx-model-dir exp/zipvoice
 fi
 
@@ -126,7 +126,7 @@ if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
             --model-name zipvoice_distill \
             --token-file data/tokens_emilia.txt \
             --checkpoint exp/zipvoice_distill/checkpoint-2000.pt \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --onnx-model-dir exp/zipvoice_distill_onnx
 fi
 
@@ -138,7 +138,7 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
       python3 -m zipvoice.bin.infer_zipvoice \
             --model-name zipvoice \
             --checkpoint exp/zipvoice/epoch-11-avg-4.pt \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer emilia \
             --token-file data/tokens_emilia.txt \
             --test-list test.tsv \
@@ -153,7 +153,7 @@ if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
       python3 zipvoice.bin.infer_zipvoice \
             --model-name zipvoice_distill \
             --checkpoint exp/zipvoice_distill/checkpoint-2000.pt \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer emilia \
             --token-file "data/tokens_emilia.txt" \
             --test-list test.tsv \
@@ -169,7 +169,7 @@ if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
             --model-name zipvoice \
             --onnx-int8 False \
             --onnx-model-dir exp/zipvoice_onnx \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer emilia \
             --token-file data/tokens_emilia.txt \
             --test-list test.tsv \
@@ -182,7 +182,7 @@ if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
             --model-name zipvoice \
             --onnx-int8 False \
             --onnx-model-dir exp/zipvoice_distill_onnx \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer emilia \
             --token-file data/tokens_emilia.txt \
             --test-list test.tsv \

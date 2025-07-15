@@ -32,7 +32,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
             --max-duration 250 \
             --lr-epochs 10 \
             --max-len 20 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer libritts \
             --token-file data/tokens_libritts.txt \
             --dataset libritts \
@@ -46,7 +46,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
             --epoch 60 \
             --avg 10 \
             --distill 0 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --token-file data/tokens_libritts.txt \
             --exp-dir exp/zipvoice_libritts
       # The generated model is exp/zipvoice_libritts/epoch-60-avg-10.pt
@@ -63,7 +63,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
             --max-duration 250 \
             --base-lr 0.001 \
             --max-len 20 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer libritts \
             --token-file data/tokens_libritts.txt \
             --dataset "libritts" \
@@ -80,7 +80,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --epoch 6 \
             --avg 3 \
             --distill 1 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --token-file data/tokens_libritts.txt \
             --exp-dir exp/zipvoice_distill_1stage_libritts
       # The generated model is exp/zipvoice_distill_1stage_libritts/epoch-6-avg-3.pt
@@ -96,7 +96,7 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
             --max-duration 250 \
             --base-lr 0.001 \
             --max-len 20 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer libritts \
             --token-file data/tokens_libritts.txt \
             --dataset libritts \
@@ -113,7 +113,7 @@ if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
             --epoch 6 \
             --avg 3 \
             --distill 1 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --token-file data/tokens_libritts.txt \
             --exp-dir exp/zipvoice_distill_libritts
       # The generated model is exp/zipvoice_distill_libritts/epoch-6-avg-3.pt
@@ -126,7 +126,7 @@ if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
       python3 -m zipvoice.bin.infer_zipvoice \
             --model-name zipvoice \
             --checkpoint exp/zipvoice_libritts/epoch-60-avg-10.pt \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer libritts \
             --token-file "data/tokens_libritts.txt" \
             --test-list test.tsv \
@@ -143,7 +143,7 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
       python3 zipvoice.bin.infer_zipvoice \
             --model-name zipvoice_distill \
             --checkpoint exp/zipvoice_distill_libritts/epoch-6-avg-3.pt \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer libritts \
             --token-file "data/tokens_libritts.txt" \
             --test-list test.tsv \

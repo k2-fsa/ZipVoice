@@ -23,7 +23,7 @@ python3 -m zipvoice.bin.generate_averaged_model  \
     --epoch 11 \
     --avg 4 \
     --distill 0 \
-    --model-config conf/model.json \
+    --model-config conf/zipvoice_base.json \
     --token-file data/tokens_emilia.txt \
     --exp-dir exp/zipvoice
 
@@ -97,7 +97,7 @@ def get_parser():
     parser.add_argument(
         "--model-config",
         type=str,
-        default="model.json",
+        default="zipvoice_base.json",
         help="The model configuration file.",
     )
 

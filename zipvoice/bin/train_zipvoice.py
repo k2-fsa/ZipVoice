@@ -27,7 +27,7 @@ python3 -m zipvoice.bin.train_zipvoice \
     --num-epochs 11 \
     --max-duration 500 \
     --lr-hours 30000 \
-    --model-config conf/model.json \
+    --model-config conf/zipvoice_base.json \
     --tokenizer emilia \
     --token-file "data/tokens_emilia.txt" \
     --dataset emilia \
@@ -222,6 +222,13 @@ def get_parser():
     )
 
     parser.add_argument(
+        "--scan-oom",
+        type=str2bool,
+        default=False,
+        help="Scan pessimistic batches to see whether they cause OOMs.",
+    )
+
+    parser.add_argument(
         "--inf-check",
         type=str2bool,
         default=False,
@@ -323,7 +330,7 @@ def get_parser():
     parser.add_argument(
         "--model-config",
         type=str,
-        default="model.json",
+        default="zipvoice_base.json",
         help="The model configuration file.",
     )
 
@@ -866,7 +873,7 @@ def run(rank, world_size, args):
         setup_dist(rank, world_size, params.master_port)
 
     os.makedirs(f"{params.exp_dir}", exist_ok=True)
-    copyfile(src=params.model_config, dst=f"{params.exp_dir}/model.json")
+    copyfile(src=params.model_config, dst=f"{params.exp_dir}/zipvoice_base.json")
     copyfile(src=params.token_file, dst=f"{params.exp_dir}/tokens.txt")
     setup_logger(f"{params.exp_dir}/log/log-train")
 
@@ -1010,7 +1017,7 @@ def run(rank, world_size, args):
 
     valid_dl = datamodule.dev_dataloaders(dev_cuts)
 
-    if not params.print_diagnostics:
+    if params.scan_oom:
         scan_pessimistic_batches_for_oom(
             model=model,
             train_dl=train_dl,

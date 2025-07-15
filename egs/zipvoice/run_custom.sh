@@ -41,12 +41,10 @@ for subset in train dev;do
       [ -f "$file_path" ] || { echo "Error: expect $file_path !" >&2; exit 1; }
 done
 
-
 ### Prepare the training data (1 - 3)
 
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
       echo "Stage 1: Prepare manifests for custom dataset from tsv files"
-
 
       for subset in train dev;do
             python3 local/prepare_custom_dataset.py \
@@ -59,7 +57,6 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
       # The output manifest files are "data/manifests/custom_cuts_train.jsonl.gz".
       # and "data/manifests/custom_cuts_dev.jsonl.gz".
 fi
-
 
 if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
       echo "Stage 2: Compute Fbank for custom dataset"
@@ -102,7 +99,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
             --max-duration 500 \
             --lr-hours ${lr_hours} \
             --max-len ${max_len} \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer simple \
             --token-file data/tokens_custom.txt \
             --dataset custom \
@@ -117,7 +114,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --iter 60000 \
             --avg 2 \
             --distill 0 \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --token-file data/tokens_custom.txt \
             --exp-dir exp/zipvoice_custom
       # The generated model is exp/zipvoice_custom/iter-60000-avg-2.pt
@@ -130,7 +127,7 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
       python3 -m zipvoice.bin.infer_zipvoice \
             --model-name zipvoice \
             --checkpoint exp/zipvoice_custom/iter-60000-avg-2.pt \
-            --model-config conf/model.json \
+            --model-config conf/zipvoice_base.json \
             --tokenizer simple \
             --token-file "data/tokens_custom.txt" \
             --test-list test.tsv \

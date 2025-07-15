@@ -25,7 +25,7 @@ python3 -m zipvoice.bin.onnx_export \
     --model-name zipvoice \
     --token-file data/tokens_emilia.txt \
     --checkpoint exp/zipvoice/epoch-11-avg-4.pt \
-    --model-config conf/model.json \
+    --model-config conf/zipvoice_base.json \
     --onnx-model-dir exp/zipvoice_onnx
 
 `--model-name` can be `zipvoice` or `zipvoice_distill`,
@@ -92,9 +92,9 @@ def get_parser():
     parser.add_argument(
         "--model-config",
         type=str,
-        default="model.json",
+        default="zipvoice_base.json",
         help="The model configuration file. "
-        "Will download model.json from huggingface if not specified.",
+        "Will download zipvoice_base.json from huggingface if not specified.",
     )
 
     return parser
