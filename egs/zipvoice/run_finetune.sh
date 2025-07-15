@@ -83,7 +83,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
       echo "Stage 3: Download pre-trained model, tokens file, and model config"
       # Uncomment this line to use HF mirror
       # export HF_ENDPOINT=https://hf-mirror.com
-      hf_repo=zhu-han/ZipVoice
+      hf_repo=k2-fsa/ZipVoice
       mkdir -p ${download_dir}
       for file in model.pt tokens.txt zipvoice_base.json; do
             huggingface-cli download \

@@ -61,7 +61,7 @@ from zipvoice.utils.checkpoint import load_checkpoint
 from zipvoice.utils.common import AttributeDict
 from zipvoice.utils.feature import VocosFbank
 
-HUGGINGFACE_REPO = "zhu-han/ZipVoice"
+HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
 PRETRAINED_MODEL = {
     "zipvoice_dialog": "zipvoice_dialog/model.pt",
     "zipvoice_dialog_stereo": "zipvoice_dialog_stereo/model.pt",
