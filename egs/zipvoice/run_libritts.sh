@@ -27,7 +27,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
       echo "Stage 2: Train the ZipVoice model"
       python3 -m zipvoice.bin.train_zipvoice \
             --world-size 8 \
-            --use-fp16 1 \
+            --use-fp16 0 \
             --num-epochs 60 \
             --max-duration 250 \
             --lr-epochs 10 \
@@ -45,7 +45,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
       python3 -m zipvoice.bin.generate_averaged_model \
             --epoch 60 \
             --avg 10 \
-            --distill 0 \
+            --model-name zipvoice \
             --model-config conf/zipvoice_base.json \
             --token-file data/tokens_libritts.txt \
             --exp-dir exp/zipvoice_libritts
@@ -58,7 +58,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
       echo "Stage 4: Train the ZipVoice-Distill model (first stage)"
       python3 -m zipvoice.bin.train_zipvoice_distill \
             --world-size 8 \
-            --use-fp16 1 \
+            --use-fp16 0 \
             --num-epochs 6 \
             --max-duration 250 \
             --base-lr 0.001 \
@@ -79,7 +79,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
       python3 -m zipvoice.bin.generate_averaged_model \
             --epoch 6 \
             --avg 3 \
-            --distill 1 \
+            --model-name zipvoice_distill \
             --model-config conf/zipvoice_base.json \
             --token-file data/tokens_libritts.txt \
             --exp-dir exp/zipvoice_distill_1stage_libritts
@@ -109,10 +109,10 @@ fi
 
 if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
       echo "Stage 7: Average the checkpoints for ZipVoice-Distill (second stage)"
-      python3 -m zipvoice.bin.generate_averaged_model.py \
+      python3 -m zipvoice.bin.generate_averaged_model \
             --epoch 6 \
             --avg 3 \
-            --distill 1 \
+            --model-name zipvoice_distill \
             --model-config conf/zipvoice_base.json \
             --token-file data/tokens_libritts.txt \
             --exp-dir exp/zipvoice_distill_libritts

@@ -49,7 +49,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
       python3 -m zipvoice.bin.generate_averaged_model \
             --epoch 11 \
             --avg 4 \
-            --distill 0 \
+            --model-name zipvoice \
             --model-config conf/zipvoice_base.json \
             --token-file data/tokens_emilia.txt \
             --exp-dir exp/zipvoice
@@ -81,7 +81,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
       python3 -m zipvoice.bin.generate_averaged_model \
             --iter 60000 \
             --avg 7 \
-            --distill 1 \
+            --model-name zipvoice_distill \
             --model-config conf/zipvoice_base.json \
             --token-file data/tokens_emilia.txt \
             --exp-dir exp/zipvoice_distill_1stage

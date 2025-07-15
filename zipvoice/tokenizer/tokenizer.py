@@ -234,13 +234,19 @@ class EmiliaTokenizer(Tokenizer):
     ) -> List[List[int]]:
         return self.tokens_to_token_ids(self.texts_to_tokens(texts))
 
+    def preprocess_text(
+        self,
+        text: str,
+    ) -> str:
+        return self.map_punctuations(text)
+
     def texts_to_tokens(
         self,
         texts: List[str],
     ) -> List[List[str]]:
         for i in range(len(texts)):
             # Text normalization
-            texts[i] = self.map_punctuations(texts[i])
+            texts[i] = self.preprocess_text(texts[i])
 
         phoneme_list = []
         for text in texts:
@@ -490,6 +496,21 @@ class EmiliaTokenizer(Tokenizer):
             return False
 
 
+class DialogTokenizer(EmiliaTokenizer):
+    def __init__(self, token_file: Optional[str] = None, token_type="phone"):
+        super().__init__(token_file=token_file, token_type=token_type)
+        self.spk_a_id = self.token2id["[S1]"]
+        self.spk_b_id = self.token2id["[S2]"]
+
+    def preprocess_text(
+        self,
+        text: str,
+    ) -> str:
+        text = re.sub(r"\s*(\[S[12]\])\s*", r"\1", text)
+        text = self.map_punctuations(text)
+        return text
+
+
 class LibriTTSTokenizer(Tokenizer):
     def __init__(self, token_file: Optional[str] = None, token_type="char"):
         """
@@ -540,7 +561,7 @@ class LibriTTSTokenizer(Tokenizer):
     ) -> List[List[int]]:
         if self.type == "bpe":
             for i in range(len(texts)):
-                texts[i] = self.normalizer.normalize(texts[i])
+                texts[i] = self.normalize(texts[i])
             return self.sp.encode(texts)
         else:
             return self.tokens_to_token_ids(self.texts_to_tokens(texts))
@@ -550,7 +571,7 @@ class LibriTTSTokenizer(Tokenizer):
         texts: List[str],
     ) -> List[List[str]]:
         for i in range(len(texts)):
-            texts[i] = self.normalizer.normalize(texts[i])
+            texts[i] = self.normalize(texts[i])
 
         if self.type == "char":
             tokens_list = [list(texts[i]) for i in range(len(texts))]

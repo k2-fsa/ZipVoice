@@ -28,7 +28,7 @@ lang=en-us
 # `lhotse cut describe data/fbank/custom_cuts_train.jsonl.gz`.
 # Set `max_len` to 99% duration.
 
-# Maximum length (seconds) of the training utterance
+# Maximum length (seconds) of the training utterance, will filter out longer utterances
 max_len=20
 
 # Download directory for pre-trained models
@@ -39,8 +39,8 @@ download_dir=download/
 # "train"/"dev" are used for training and validation respectively.
 
 # Each line of the TSV files should be in one of the following formats:
-# - `{uniq_id}\t{text}\t{wav_path}` if the text corresponds to the full wav,
-# - `{uniq_id}\t{text}\t{wav_path}\t{start_time}\t{end_time}` if text corresponds
+# (1) `{uniq_id}\t{text}\t{wav_path}` if the text corresponds to the full wav,
+# (2) `{uniq_id}\t{text}\t{wav_path}\t{start_time}\t{end_time}` if text corresponds
 #     to part of the wav. The start_time and end_time specify the start and end
 #     times of the text within the wav, which should be in seconds.
 # > Note: {uniq_id} must be unique for each line.
@@ -83,7 +83,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
       echo "Stage 3: Download pre-trained model, tokens file, and model config"
       # Uncomment this line to use HF mirror
       # export HF_ENDPOINT=https://hf-mirror.com
-      hf_repo=k2-fsa/ZipVoice
+      hf_repo=zhu-han/ZipVoice
       mkdir -p ${download_dir}
       for file in model.pt tokens.txt zipvoice_base.json; do
             huggingface-cli download \
@@ -132,7 +132,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
       python3 -m zipvoice.bin.generate_averaged_model \
             --iter 10000 \
             --avg 2 \
-            --distill 0 \
+            --model-name zipvoice \
             --model-config download/zipvoice/zipvoice_base.json \
             --token-file download/zipvoice/tokens.txt \
             --exp-dir exp/zipvoice_finetune

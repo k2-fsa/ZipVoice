@@ -22,7 +22,7 @@ This script loads checkpoints and averages them.
 python3 -m zipvoice.bin.generate_averaged_model  \
     --epoch 11 \
     --avg 4 \
-    --distill 0 \
+    --model_name zipvoice \
     --model-config conf/zipvoice_base.json \
     --token-file data/tokens_emilia.txt \
     --exp-dir exp/zipvoice
@@ -38,13 +38,14 @@ from pathlib import Path
 import torch
 
 from zipvoice.models.zipvoice import ZipVoice
+from zipvoice.models.zipvoice_dialog import ZipVoiceDialog, ZipVoiceDialogStereo
 from zipvoice.models.zipvoice_distill import ZipVoiceDistill
 from zipvoice.tokenizer.tokenizer import SimpleTokenizer
 from zipvoice.utils.checkpoint import (
     average_checkpoints_with_averaged_model,
     find_checkpoints,
 )
-from zipvoice.utils.common import AttributeDict, str2bool
+from zipvoice.utils.common import AttributeDict
 
 
 def get_parser():
@@ -88,10 +89,16 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--distill",
-        type=str2bool,
-        default=False,
-        help="Whether to use distill model. ",
+        "--model_name",
+        type=str,
+        default="zipvoice",
+        choices=[
+            "zipvoice",
+            "zipvoice_distill",
+            "zipvoice_dialog",
+            "zipvoice_dialog_stereo",
+        ],
+        help="The model type to be averaged. ",
     )
 
     parser.add_argument(
@@ -125,7 +132,18 @@ def main():
         model_config = json.load(f)
 
     tokenizer = SimpleTokenizer(token_file=params.token_file)
-    tokenizer_config = {"vocab_size": tokenizer.vocab_size, "pad_id": tokenizer.pad_id}
+    if params.model_name in ["zipvoice", "zipvoice_distill"]:
+        tokenizer_config = {
+            "vocab_size": tokenizer.vocab_size,
+            "pad_id": tokenizer.pad_id,
+        }
+    elif params.model_name in ["zipvoice_dialog", "zipvoice_dialog_stereo"]:
+        tokenizer_config = {
+            "vocab_size": tokenizer.vocab_size,
+            "pad_id": tokenizer.pad_id,
+            "spk_a_id": tokenizer.spk_a_id,
+            "spk_b_id": tokenizer.spk_a_id,
+        }
 
     params.suffix = f"epoch-{params.epoch}-avg-{params.avg}"
 
@@ -135,16 +153,28 @@ def main():
     print(f"Device: {params.device}")
 
     print("About to create model")
-    if params.distill:
-        model = ZipVoiceDistill(
-            **model_config["model"],
-            **tokenizer_config,
-        )
-    else:
+    if params.model_name == "zipvoice":
         model = ZipVoice(
             **model_config["model"],
             **tokenizer_config,
         )
+    elif params.model_name == "zipvoice_distill":
+        model = ZipVoiceDistill(
+            **model_config["model"],
+            **tokenizer_config,
+        )
+    elif params.model_name == "zipvoice_dialog":
+        model = ZipVoiceDialog(
+            **model_config["model"],
+            **tokenizer_config,
+        )
+    elif params.model_name == "zipvoice_dialog_stereo":
+        model = ZipVoiceDialogStereo(
+            **model_config["model"],
+            **tokenizer_config,
+        )
+    else:
+        raise ValueError(f"Unknown model name: {params.model_name}")
 
     if params.iter > 0:
         filenames = find_checkpoints(params.exp_dir, iteration=-params.iter)[

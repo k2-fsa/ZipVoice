@@ -146,6 +146,91 @@ def load_checkpoint(
     return checkpoint
 
 
+def load_checkpoint_extend_vocab_size(
+    filename: Path, extend_size: int, model: nn.Module, strict: bool = True
+) -> Dict[str, Any]:
+    logging.info(f"Loading checkpoint from {filename}")
+    checkpoint = torch.load(filename, map_location="cpu", weights_only=False)
+
+    if model is not None:
+        if next(iter(checkpoint["model"])).startswith("module."):
+            logging.info("Loading checkpoint saved by DDP")
+            dst_state_dict = model.state_dict()
+            src_state_dict = checkpoint["model"]
+            for key in dst_state_dict.keys():
+                src_key = "{}.{}".format("module", key)
+                dst_state_dict[key] = src_state_dict.pop(src_key)
+            assert len(src_state_dict) == 0
+        else:
+            logging.info("Loading checkpoint")
+            dst_state_dict = checkpoint["model"]
+        dst_state_dict["spk_embed.weight"] = model.state_dict()["spk_embed.weight"]
+        embed_weight = model.state_dict()["embed.weight"]
+        embed_weight[:-extend_size, :] = dst_state_dict["embed.weight"]
+        dst_state_dict["embed.weight"] = embed_weight
+
+        model.load_state_dict(dst_state_dict, strict=strict)
+
+
+def load_checkpoint_copy_proj_three_channel_alter(
+    filename: Path,
+    in_proj_key: str,
+    out_proj_key: str,
+    dim: int,
+    model: nn.Module,
+) -> Dict[str, Any]:
+    logging.info(f"Loading checkpoint from {filename}")
+    checkpoint = torch.load(filename, map_location="cpu", weights_only=False)
+
+    if model is not None:
+        if next(iter(checkpoint["model"])).startswith("module."):
+            logging.info("Loading checkpoint saved by DDP")
+
+            dst_state_dict = dict()
+            src_state_dict = checkpoint["model"]
+            for key in src_state_dict.keys():
+                dst_state_dict[key.lstrip("module.")] = src_state_dict.pop(key)
+            assert len(src_state_dict) == 0
+        else:
+            logging.info("Loading checkpoint")
+            dst_state_dict = checkpoint["model"]
+        keys = list(dst_state_dict.keys())
+        for key in keys:
+            if in_proj_key in key:
+                if "weight" in key:
+                    weight = dst_state_dict.pop(key)
+                    dst_state_dict[key.replace("weight", "0.weight")] = torch.cat(
+                        [
+                            weight[:, :dim] / 2,
+                            weight[:, :dim] / 2,
+                            weight[:, dim : dim * 2],
+                            weight[:, dim * 2 :] / 2,
+                            weight[:, dim * 2 :] / 2,
+                        ],
+                        dim=-1,
+                    )
+                    dst_state_dict[key.replace("weight", "1.weight")] = weight
+                if "bias" in key:
+                    bias = dst_state_dict.pop(key)
+                    dst_state_dict[key.replace("bias", "0.bias")] = bias
+                    dst_state_dict[key.replace("bias", "1.bias")] = bias
+            if out_proj_key in key:
+                if "weight" in key:
+                    weight = dst_state_dict.pop(key)
+                    dst_state_dict[key.replace("weight", "0.weight")] = torch.cat(
+                        [weight, weight], dim=0
+                    )
+                    dst_state_dict[key.replace("weight", "1.weight")] = weight
+                elif "bias" in key:
+                    bias = dst_state_dict.pop(key)
+                    dst_state_dict[key.replace("bias", "0.bias")] = torch.cat(
+                        [bias, bias], dim=0
+                    )
+                    dst_state_dict[key.replace("bias", "1.bias")] = bias
+
+        model.load_state_dict(dst_state_dict, strict=True)
+
+
 def find_checkpoints(out_dir: Path, iteration: int = 0) -> List[str]:
     """Find all available checkpoints in a directory.
 

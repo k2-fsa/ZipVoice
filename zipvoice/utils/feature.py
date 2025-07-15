@@ -39,9 +39,11 @@ class VocosFbank(FeatureExtractor):
     name = "VocosFbank"
     config_type = VocosFbankConfig
 
-    def __init__(self):
+    def __init__(self, num_channels: int = 1):
         config = VocosFbankConfig
         super().__init__(config=config)
+        assert num_channels in (1, 2)
+        self.num_channels = num_channels
         self.fbank = torchaudio.transforms.MelSpectrogram(
             sample_rate=self.config.sampling_rate,
             n_fft=self.config.n_fft,
@@ -84,16 +86,17 @@ class VocosFbank(FeatureExtractor):
             samples = samples.unsqueeze(0)
         else:
             assert samples.ndim == 2, samples.shape
+
+        if self.num_channels == 1:
             if samples.shape[0] == 2:
-                samples = samples.mean(dim=0, keepdim=True)
+                samples = samples.mean(dim=0, keepdims=True)
+        else:
+            assert samples.shape[0] == 2, samples.shape
 
-        assert samples.ndim == 2, samples.shape
-        assert samples.shape[0] == 1, samples.shape
-
-        mel = self._feature_fn(samples).squeeze().t()
-
-        assert mel.ndim == 2, mel.shape
-        assert mel.shape[1] == self.config.n_mels, mel.shape
+        mel = self._feature_fn(samples)
+        # (1, n_mels, time) or (2, n_mels, time)
+        mel = mel.reshape(-1, mel.shape[-1]).t()
+        # (time, n_mels) or (time, 2 * n_mels)
 
         num_frames = compute_num_frames(
             samples.shape[1] / sampling_rate, self.frame_shift, sampling_rate

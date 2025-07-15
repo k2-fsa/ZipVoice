@@ -21,9 +21,9 @@ nj=20
 # the command `lhotse cut describe data/fbank/custom_cuts_train.jsonl.gz`.
 # Set `train_hours` to "Total speech duration", and set `max_len` to 99% duration.
 
-# Number of hours for training, will affect the learning rate schedule
+# Number of hours in training set, will affect the learning rate schedule
 train_hours=500
-# Maximum length (seconds) of the training utterance
+# Maximum length (seconds) of the training utterance, will filter out longer utterances
 max_len=20
 
 # We suppose you have two TSV files: "data/raw/custom_train.tsv" and 
@@ -31,8 +31,8 @@ max_len=20
 # "train"/"dev" are used for training and validation respectively.
 
 # Each line of the TSV files should be in one of the following formats:
-# - `{uniq_id}\t{text}\t{wav_path}` if the text corresponds to the full wav,
-# - `{uniq_id}\t{text}\t{wav_path}\t{start_time}\t{end_time}` if text corresponds
+# (1) `{uniq_id}\t{text}\t{wav_path}` if the text corresponds to the full wav,
+# (2) `{uniq_id}\t{text}\t{wav_path}\t{start_time}\t{end_time}` if text corresponds
 #     to part of the wav. The start_time and end_time specify the start and end
 #     times of the text within the wav, which should be in seconds.
 # > Note: {uniq_id} must be unique for each line.
@@ -113,7 +113,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
       python3 -m zipvoice.bin.generate_averaged_model \
             --iter 60000 \
             --avg 2 \
-            --distill 0 \
+            --model-name zipvoice \
             --model-config conf/zipvoice_base.json \
             --token-file data/tokens_custom.txt \
             --exp-dir exp/zipvoice_custom
