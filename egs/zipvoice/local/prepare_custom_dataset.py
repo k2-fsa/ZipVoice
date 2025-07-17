@@ -204,13 +204,13 @@ def prepare_dataset(
             if len(items) == 3:
                 uniq_id, text, wav_path = items
                 start, end = 0, None
-            elif len(items) == 6:
+            elif len(items) == 5:
                 uniq_id, text, wav_path, start, end = items
                 start, end = float(start), float(end)
             else:
                 raise ValueError(
                     f"Invalid line format: {line},"
-                    "requries to be 3 columns or 6 columns"
+                    "requries to be 3 columns or 5 columns"
                 )
             recordings_path_set.add(wav_path)
             supervision_list.append((uniq_id, text, wav_path, start, end))
