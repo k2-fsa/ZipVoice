@@ -114,9 +114,9 @@ source zipvoice/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. (Optional) Install k2 for training or efficient inference
+### 4. Install k2 for training or efficient inference
 
-k2 is necessary for training and can speed up inference. Nevertheless, you can still use the inference mode of ZipVoice without installing k2.
+**k2 is necessary for training** and can speed up inference. Nevertheless, you can still use the inference mode of ZipVoice without installing k2.
 
 > **Note:**  Make sure to install the k2 version that matches your PyTorch and CUDA version. For example, if you are using pytorch 2.5.1 and CUDA 12.1, you can install k2 as follows:
 
@@ -224,7 +224,7 @@ To manually correct these mispronunciations, enclose the **corrected pinyin** in
 
 ## Train Your Own Model
 
-See the [egs](egs) directory for training and fine-tuning examples.
+See the [egs](egs) directory for training, fine-tuning and evaluation examples.
 
 ## Discussion & Communication
 

@@ -16,56 +16,30 @@
 # limitations under the License.
 
 """
-This script generates lhotse manifest files from TSV files for custom datasets.
+This script prepares lhotse manifest files from the raw OpenDialog datasets.
 
-Each line of the TSV files should be in one of the following formats:
-1. "{uniq_id}\t{text}\t{wav_path}" if the text corresponds to the full wav",
-2. "{uniq_id}\t{text}\t{wav_path}\t{start_time}\t{end_time} if text corresponds
-    to part of the wav. The start_time and end_time specify the start and end
-    times of the text within the wav, which should be in seconds.
+We assume that you have downloaded the OpenDialog dataset and untarred the
+tar files in audio/en and audio/zh so that the mp3 files are placed under
+these two directories.
 
-Note: {uniq_id} must be unique for each line.
-
-Usage:
-
-Suppose you have two TSV files: "custom_train.tsv" and "custom_dev.tsv",
-where "custom" is your dataset name, "train"/"dev" are used for training and
-validation respectively.
-
-(1) Prepare the training data
-
-python3 local/prepare_custom_dataset.py \
-    --tsv-path "download/custom_train.tsv" \
-    --prefix "custom" \
-    --subset "train" \
-    --num-jobs 20 \
-    --output-dir "data/manifests"
-
-The output file would be "data/manifests/custom_cuts_train.jsonl.gz".
-
-(2) Prepare the validation data
-
-python3 local/prepare_custom_dataset.py \
-    --tsv-path "download/custom_dev.tsv" \
-    --prefix "custom" \
-    --subset "dev" \
-    --num-jobs 1 \
-    --output-dir "data/manifests"
-
-The output file would be "data/manifests/custom_cuts_dev.jsonl.gz".
+Download OpenDialog at https://huggingface.co/datasets/k2-fsa/OpenDialog
+or https://www.modelscope.cn/datasets/k2-fsa/OpenDialog
 
 """
 
 import argparse
+import json
 import logging
 import math
 import re
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from lhotse import CutSet, validate_recordings_and_supervisions
 from lhotse.audio import Recording, RecordingSet
+from lhotse.cut import Cut
 from lhotse.qa import fix_manifests
 from lhotse.supervision import SupervisionSegment, SupervisionSet
 from lhotse.utils import Pathlike
@@ -76,25 +50,9 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--tsv-path",
+        "--dataset-path",
         type=str,
-        help="The path of the tsv file. Each line should be in the format: "
-        "{uniq_id}\t{text}\t{wav_path}\t{start_time}\t{end_time} "
-        "if text corresponds to part of the wav or {uniq_id}\t{text}\t{wav_path} "
-        "if the text corresponds to the full wav",
-    )
-    parser.add_argument(
-        "--prefix",
-        type=str,
-        default="custom",
-        help="Prefix of the output manifest file.",
-    )
-
-    parser.add_argument(
-        "--subset",
-        type=str,
-        default="train",
-        help="Subset name manifest file, typically train or dev.",
+        help="The path of OpenDialog dataset.",
     )
 
     parser.add_argument(
@@ -127,7 +85,7 @@ def _parse_recording(
     :return: a tuple of "recording" and "recording_id"
     """
 
-    recording_id = wav_path.replace("/", "_").replace(".", "_")
+    recording_id = Path(wav_path).stem
     recording = Recording.from_file(path=wav_path, recording_id=recording_id)
 
     return recording, recording_id
@@ -148,7 +106,7 @@ def _parse_supervision(
 
     uniq_id, text, wav_path, start, end = supervision
     try:
-        recording_id = wav_path.replace("/", "_").replace(".", "_")
+        recording_id = Path(wav_path).stem
 
         recording = recording_dict[recording_id]
         duration = (
@@ -175,10 +133,9 @@ def _parse_supervision(
         return None
 
 
-def prepare_dataset(
-    tsv_path: Pathlike,
-    prefix: str,
-    subset: str,
+def prepare_subset(
+    jsonl_path: Pathlike,
+    lang: str,
     sampling_rate: int,
     num_jobs: int,
     output_dir: Pathlike,
@@ -186,35 +143,29 @@ def prepare_dataset(
     """
     Returns the manifests which consist of the Recordings and Supervisions
 
-    :param tsv_path: Path to the TSV file
-    :param output_dir: Path where to write the manifests
+    :param jsonl_path: Path to the jsonl file
+    :param lang: Language of the subset
+    :param sampling_rate: Target sampling rate of the audio
     :param num_jobs: Number of processes for parallel processing
-    :return: The CutSet containing the data
+    :param output_dir: Path where to write the manifests
     """
-
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Preparing {lang} subset")
 
     # Step 1: Read all unique recording paths
+    print(f"Reading {jsonl_path}")
     recordings_path_set = set()
     supervision_list = list()
-    with open(tsv_path, "r") as fr:
+    with open(jsonl_path, "r") as fr:
         for line in fr:
-            items = line.strip().split("\t")
-            if len(items) == 3:
-                uniq_id, text, wav_path = items
+            try:
+                items = json.loads(line)
+                uniq_id, text, wav_path = items["id"], items["text"], items["path"]
                 start, end = 0, None
-            elif len(items) == 5:
-                uniq_id, text, wav_path, start, end = items
-                start, end = float(start), float(end)
-            else:
-                raise ValueError(
-                    f"Invalid line format: {line},"
-                    "requries to be 3 columns or 5 columns"
-                )
-            recordings_path_set.add(wav_path)
-            supervision_list.append((uniq_id, text, wav_path, start, end))
-
+                recordings_path_set.add(jsonl_path.parent / wav_path)
+                supervision_list.append((uniq_id, text, wav_path, start, end))
+            except Exception as e:
+                print(f"Error {e} when decoding JSON line: {line}")
+                continue
     print("Starting to process recordings...")
     # Step 2: Process recordings
     futures = []
@@ -254,12 +205,42 @@ def prepare_dataset(
         recordings=recording_set, supervisions=supervision_set
     )
     cut_set = cut_set.sort_by_recording_id()
-    cut_set = cut_set.resample(sampling_rate)
+    if sampling_rate != 24000:
+        # All OpenDialog audios are 24kHz
+        cut_set = cut_set.resample(sampling_rate)
     cut_set = cut_set.trim_to_supervisions(keep_overlapping=False)
 
     print("Saving cuts to disk...")
     # Step 5: Write manifests to disk
-    cut_set.to_file(output_dir / f"{prefix}_cuts_{subset}.jsonl.gz")
+    cut_set.to_file(output_dir / f"opendialog_cuts_{lang.upper()}-all.jsonl.gz")
+    dev_cut_set = cut_set.subset(first=1000)
+    dev_cut_set.to_file(output_dir / f"opendialog_cuts_{lang.upper()}-dev.jsonl.gz")
+
+    def remove_dev(c: Cut, set: set):
+        if c.id in set:
+            return False
+        return True
+
+    _remove_dev = partial(remove_dev, set=set(dev_cut_set.ids))
+    train_cut_set = cut_set.filter(_remove_dev)
+    train_cut_set.to_file(output_dir / f"opendialog_cuts_{lang.upper()}-train.jsonl.gz")
+
+
+def prepare_dataset(
+    dataset_path: Pathlike,
+    sampling_rate: int,
+    num_jobs: int,
+    output_dir: Pathlike,
+):
+    for lang in ["en", "zh"]:
+        jsonl_path = dataset_path / f"manifest.{lang}.jsonl"
+        prepare_subset(
+            jsonl_path=jsonl_path,
+            lang=lang,
+            sampling_rate=sampling_rate,
+            num_jobs=num_jobs,
+            output_dir=output_dir,
+        )
 
 
 if __name__ == "__main__":
@@ -267,12 +248,13 @@ if __name__ == "__main__":
     logging.basicConfig(format=formatter, level=logging.INFO)
 
     args = get_args()
+    dataset_path = Path(args.dataset_path)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     prepare_dataset(
-        tsv_path=args.tsv_path,
-        prefix=args.prefix,
-        subset=args.subset,
+        dataset_path=dataset_path,
         sampling_rate=args.sampling_rate,
         num_jobs=args.num_jobs,
-        output_dir=args.output_dir,
+        output_dir=output_dir,
     )

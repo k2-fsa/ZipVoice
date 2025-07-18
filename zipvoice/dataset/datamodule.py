@@ -317,3 +317,31 @@ class TtsDataModule:
         return load_manifest_lazy(
             self.args.manifest_dir / "libritts_cuts_dev-clean.jsonl.gz"
         )
+
+    @lru_cache()
+    def train_opendialog_en_cuts(self) -> CutSet:
+        logging.info("About to ge the EN train subset of OpenDialog")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "opendialog_cuts_EN-train.jsonl.gz"
+        )
+
+    @lru_cache()
+    def train_opendialog_zh_cuts(self) -> CutSet:
+        logging.info("About to get the ZH train subset of OpenDialog")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "opendialog_cuts_ZH-train.jsonl.gz"
+        )
+
+    @lru_cache()
+    def dev_opendialog_en_cuts(self) -> CutSet:
+        logging.info("About to ge the EN dev subset of OpenDialog")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "opendialog_cuts_EN-dev.jsonl.gz"
+        )
+
+    @lru_cache()
+    def dev_opendialog_zh_cuts(self) -> CutSet:
+        logging.info("About to get the ZH dev subset of OpenDialog")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "opendialog_cuts_ZH-dev.jsonl.gz"
+        )

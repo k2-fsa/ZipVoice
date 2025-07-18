@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# This script is an example of training ZipVoice on your custom datasets from scratch.
+# This script is an example of fine-tune our pre-trained ZipVoice-Dialog on your custom datasets.
+# Only support English and Chinese for now.
 
 # Add project root to PYTHONPATH
 export PYTHONPATH=../../:$PYTHONPATH
@@ -16,15 +17,9 @@ stop_stage=6
 
 # Number of jobs for data preparation
 nj=20
-
-# You can set `train_hours` and `max_len` according to statistics from
-# the command `lhotse cut describe data/fbank/custom_cuts_train.jsonl.gz`.
-# Set `train_hours` to "Total speech duration", and set `max_len` to 99% duration.
-
-# Number of hours in training set, will affect the learning rate schedule
-train_hours=500
 # Maximum length (seconds) of the training utterance, will filter out longer utterances
-max_len=20
+max_len=60
+download_dir=download/
 
 # We suppose you have two TSV files: "data/raw/custom_train.tsv" and 
 # "data/raw/custom_dev.tsv", where "custom" is your dataset name, 
@@ -72,64 +67,61 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
 fi
 
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
-      echo "Stage 3: Prepare tokens file for custom dataset"
-      # In this example, we use the simplest tokenizer that 
-      #     treat every character as a token.
-      python3 ./local/prepare_token_file_char.py \
-            --manifest data/manifests/custom_cuts_train.jsonl.gz \
-            --tokens data/tokens_custom.txt
+      echo "Stage 3: Download pre-trained model, tokens file, and model config"
+      # Uncomment this line to use HF mirror
+      # export HF_ENDPOINT=https://hf-mirror.com
+
+      mkdir -p ${download_dir}
+      hf_repo=k2-fsa/ZipVoice
+      for file in model.pt tokens.txt model.json; do
+            huggingface-cli download \
+                  --local-dir ${download_dir} \
+                  ${hf_repo} \
+                  zipvoice_dialog/${file}
+      done
 fi
 
-
-### Training (4 - 5)
-
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
-      echo "Stage 4: Train the ZipVoice model"
-
-      [ -z "$train_hours" ] && { echo "Error: train_hours is not set!" >&2; exit 1; }
-      [ -z "$max_len" ] && { echo "Error: max_len is not set!" >&2; exit 1; }
-
-      # lr-hours will be set according to the `train_hours`,
-      # i.e., lr_hours = 1000 * (train_hours ** 0.3).
-      lr_hours=$(python3 -c "print(round(1000 * ($train_hours ** 0.3)))" )
-      python3 -m zipvoice.bin.train_zipvoice \
+      echo "Stage 4: Fine-tune the ZipVoice-Dialog model"
+      python3 -m zipvoice.bin.train_zipvoice_dialog \
             --world-size 4 \
             --use-fp16 1 \
-            --num-iters 60000 \
+            --finetune 1 \
+            --base-lr 0.0001 \
+            --num-iters 10000 \
+            --save-every-n 1000 \
             --max-duration 500 \
-            --lr-hours ${lr_hours} \
             --max-len ${max_len} \
-            --model-config conf/zipvoice_base.json \
-            --tokenizer simple \
-            --token-file data/tokens_custom.txt \
+            --checkpoint ${download_dir}/zipvoice_dialog/model.pt \
+            --model-config ${download_dir}/zipvoice_dialog/model.json \
+            --token-file ${download_dir}/zipvoice_dialog/tokens.txt \
             --dataset custom \
             --train-manifest data/fbank/custom_cuts_train.jsonl.gz \
             --dev-manifest data/fbank/custom_cuts_dev.jsonl.gz \
-            --exp-dir exp/zipvoice_custom
+            --exp-dir exp/zipvoice_dialog_finetune
 fi
 
 if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
       echo "Stage 5: Average the checkpoints for ZipVoice"
       python3 -m zipvoice.bin.generate_averaged_model \
-            --iter 60000 \
+            --iter 10000 \
             --avg 2 \
-            --model-name zipvoice \
-            --model-config conf/zipvoice_base.json \
-            --token-file data/tokens_custom.txt \
-            --exp-dir exp/zipvoice_custom
-      # The generated model is exp/zipvoice_custom/iter-60000-avg-2.pt
+            --model-name zipvoice_dialog \
+            --model-config exp/zipvoice_dialog_finetune/model.json \
+            --token-file exp/zipvoice_dialog_finetune/tokens.txt \
+            --exp-dir exp/zipvoice_dialog_finetune
+      # The generated model is exp/zipvoice_dialog_finetune/iter-10000-avg-2.pt
 fi
 
 ### Inference with PyTorch models (6)
 
 if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
       echo "Stage 6: Inference of the ZipVoice model"
-      python3 -m zipvoice.bin.infer_zipvoice \
-            --model-name zipvoice \
-            --checkpoint exp/zipvoice_custom/iter-60000-avg-2.pt \
-            --model-config conf/zipvoice_base.json \
-            --tokenizer simple \
-            --token-file "data/tokens_custom.txt" \
+      python3 -m zipvoice.bin.infer_zipvoice_dialog \
+            --model-name zipvoice_dialog \
+            --checkpoint exp/zipvoice_dialog_finetune/iter-10000-avg-2.pt \
+            --model-config exp/zipvoice_dialog_finetune/model.json \
+            --token-file exp/zipvoice_dialog_finetune/tokens.txt \
             --test-list test.tsv \
-            --res-dir results/test_custom
+            --res-dir results/test_dialog_finetune
 fi
