@@ -33,7 +33,7 @@ from pyannote.audio import Pipeline
 from tqdm import tqdm
 
 from zipvoice.eval.models.ecapa_tdnn_wavlm import ECAPA_TDNN_WAVLM
-from zipvoice.eval.utils import load_waveform, setup_console_logger
+from zipvoice.eval.utils import load_waveform
 
 warnings.filterwarnings("ignore")
 
@@ -355,7 +355,9 @@ if __name__ == "__main__":
 
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    setup_console_logger()
+
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
 
     parser = get_parser()
     args = parser.parse_args()

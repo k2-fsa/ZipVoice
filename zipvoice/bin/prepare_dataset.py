@@ -34,8 +34,8 @@ validation respectively.
 
 (1) Prepare the training data
 
-python3 local/prepare_custom_dataset.py \
-    --tsv-path "download/custom_train.tsv" \
+python3 -m zipvoice.bin.prepare_dataset \
+    --tsv-path data/raw/custom_train.tsv \
     --prefix "custom" \
     --subset "train" \
     --num-jobs 20 \
@@ -45,8 +45,8 @@ The output file would be "data/manifests/custom_cuts_train.jsonl.gz".
 
 (2) Prepare the validation data
 
-python3 local/prepare_custom_dataset.py \
-    --tsv-path "download/custom_dev.tsv" \
+python3 -m zipvoice.bin.prepare_dataset \
+    --tsv-path data/raw/custom_dev.tsv \
     --prefix "custom" \
     --subset "dev" \
     --num-jobs 1 \
@@ -58,7 +58,6 @@ The output file would be "data/manifests/custom_cuts_dev.jsonl.gz".
 
 import argparse
 import logging
-import math
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -142,20 +141,12 @@ def _parse_supervision(
     :return: A SupervisionSegment object
     """
 
-    def _round_down(num, ndigits=0):
-        factor = 10**ndigits
-        return math.floor(num * factor) / factor
-
     uniq_id, text, wav_path, start, end = supervision
     try:
         recording_id = wav_path.replace("/", "_").replace(".", "_")
 
         recording = recording_dict[recording_id]
-        duration = (
-            _round_down(end - start, ndigits=8)
-            if end is not None
-            else _round_down(recording.duration, ndigits=8)
-        )
+        duration = end - start if end is not None else recording.duration
         assert duration <= recording.duration, f"Duration {duration} is greater than "
         f"recording duration {recording.duration}"
 
@@ -171,7 +162,7 @@ def _parse_supervision(
             text=text.strip(),
         )
     except Exception as e:
-        print(f"Error processing line: {e}")
+        logging.warning(f"Error processing line: {e}")
         return None
 
 
@@ -191,9 +182,13 @@ def prepare_dataset(
     :param num_jobs: Number of processes for parallel processing
     :return: The CutSet containing the data
     """
-
+    logging.info(f"Preparing {prefix} dataset {subset} subset.")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"{prefix}_cuts_{subset}.jsonl.gz"
+    if (output_dir / file_name).is_file():
+        logging.info(f"{file_name} exists, skipping.")
+        return
 
     # Step 1: Read all unique recording paths
     recordings_path_set = set()
@@ -215,7 +210,7 @@ def prepare_dataset(
             recordings_path_set.add(wav_path)
             supervision_list.append((uniq_id, text, wav_path, start, end))
 
-    print("Starting to process recordings...")
+    logging.info("Starting to process recordings...")
     # Step 2: Process recordings
     futures = []
     recording_dict = {}
@@ -234,7 +229,7 @@ def prepare_dataset(
 
         recording_set = RecordingSet.from_recordings(recording_dict.values())
 
-    print("Starting to process supervisions...")
+    logging.info("Starting to process supervisions...")
     # Step 3: Process supervisions
     supervisions = []
     for supervision in tqdm(supervision_list, desc="Processing supervisions"):
@@ -242,7 +237,7 @@ def prepare_dataset(
         if seg is not None:
             supervisions.append(seg)
 
-    print("Processing Cuts...")
+    logging.info("Processing Cuts...")
 
     # Step 4: Create and validate manifests
     supervision_set = SupervisionSet.from_segments(supervisions)
@@ -257,14 +252,15 @@ def prepare_dataset(
     cut_set = cut_set.resample(sampling_rate)
     cut_set = cut_set.trim_to_supervisions(keep_overlapping=False)
 
-    print("Saving cuts to disk...")
+    logging.info(f"Saving file to {output_dir / file_name}")
     # Step 5: Write manifests to disk
-    cut_set.to_file(output_dir / f"{prefix}_cuts_{subset}.jsonl.gz")
+    cut_set.to_file(output_dir / file_name)
+    logging.info("Done!")
 
 
 if __name__ == "__main__":
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-    logging.basicConfig(format=formatter, level=logging.INFO)
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
 
     args = get_args()
 

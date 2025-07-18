@@ -1,5 +1,4 @@
 import logging
-import sys
 
 import librosa
 import soundfile as sf
@@ -52,7 +51,7 @@ def load_waveform(
         max_length = sample_rate * max_seconds
         if len(wav_data) > max_length:
             wav_data = wav_data[:max_length]
-            print(
+            logging.warning(
                 f"Wav file {fname} is longer than 2 minutes, "
                 f"truncated to 2 minutes to avoid OOM."
             )
@@ -61,25 +60,3 @@ def load_waveform(
     else:
         wav_data = torch.from_numpy(wav_data)
         return wav_data.to(device)
-
-
-def setup_console_logger(level=logging.INFO):
-    """
-    Sets up a console logger for the root logger, ensuring full control over output.
-    It clears existing handlers to prevent conflicts with default logging setups.
-    """
-    root_logger = logging.getLogger("")
-    root_logger.setLevel(level)
-
-    if root_logger.handlers:
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
-
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-    )
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    console_handler.setFormatter(formatter)
-    root_logger.addHandler(console_handler)

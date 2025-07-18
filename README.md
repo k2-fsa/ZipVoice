@@ -127,6 +127,12 @@ pip install k2==1.24.4.dev20250208+cuda12.1.torch2.5.1 -f https://k2-fsa.github.
 Please refer to https://k2-fsa.org/get-started/k2/ for details.
 Users in China mainland can refer to https://k2-fsa.org/zh-CN/get-started/k2/.
 
+- To check the k2 installation:
+
+```
+python3 -c "import k2; print(k2.__file__)"
+```
+
 ## Usage
 
 ### 1. Single-speaker speech generation
@@ -164,7 +170,7 @@ python3 -m zipvoice.bin.infer_zipvoice \
 
 - Each line of `test.tsv` is in the format of `{wav_name}\t{prompt_transcription}\t{prompt_wav}\t{text}`.
 
-### 2. Spoken dialogue generation
+### 2. Dialogue speech generation
 
 #### 2.1 Inference command
 

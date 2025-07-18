@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 import torch.nn as nn
 from lhotse.dataset.sampling.base import CutSampler
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 

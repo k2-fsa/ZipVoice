@@ -14,6 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """
 This script generates speech with our pre-trained ZipVoice or ZipVoice-Distill
     ONNX models. If no local model is specified,
@@ -29,7 +30,7 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 python3 -m zipvoice.bin.infer_zipvoice_onnx \
     --onnx-int8 False \
-    --model-name "zipvoice" \
+    --model-name zipvoice \
     --prompt-wav prompt.wav \
     --prompt-text "I am a prompt." \
     --text "I am a sentence." \
@@ -38,7 +39,7 @@ python3 -m zipvoice.bin.infer_zipvoice_onnx \
 (2) Inference of a list of sentences:
 python3 -m zipvoice.bin.infer_zipvoice_onnx \
     --onnx-int8 False \
-    --model-name "zipvoice" \
+    --model-name zipvoice \
     --test-list test.tsv \
     --res-dir results
 
@@ -54,7 +55,9 @@ Set `--onnx-int8 True` to use int8 quantizated ONNX model.
 import argparse
 import datetime as dt
 import json
+import logging
 import os
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
@@ -77,13 +80,9 @@ from zipvoice.utils.common import AttributeDict, str2bool
 from zipvoice.utils.feature import VocosFbank
 
 HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
-TOKEN_FILE = {
-    "zipvoice": "zipvoice/tokens.txt",
-    "zipvoice_distill": "zipvoice_distill/tokens.txt",
-}
-MODEL_CONFIG = {
-    "zipvoice": "zipvoice/model.json",
-    "zipvoice_distill": "zipvoice_distill/model.json",
+MODEL_DIR = {
+    "zipvoice": "zipvoice",
+    "zipvoice_distill": "zipvoice_distill",
 }
 
 
@@ -108,19 +107,11 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--onnx-model-dir",
+        "--model-dir",
         type=str,
         default=None,
         help="The path to the local onnx model. "
         "Will download pre-trained checkpoint from huggingface if not specified.",
-    )
-
-    parser.add_argument(
-        "--model-config",
-        type=str,
-        default=None,
-        help="The model configuration file. "
-        "Will download model.json from huggingface if not specified.",
     )
 
     parser.add_argument(
@@ -129,15 +120,6 @@ def get_parser():
         default=None,
         help="The vocoder checkpoint. "
         "Will download pre-trained vocoder from huggingface if not specified.",
-    )
-
-    parser.add_argument(
-        "--token-file",
-        type=str,
-        default=None,
-        help="The file that contains information that maps tokens to ids,"
-        "which is a text file with '{token}\t{token_id}' per line. "
-        "Will download tokens_emilia.txt from huggingface if not specified.",
     )
 
     parser.add_argument(
@@ -398,7 +380,7 @@ def sample(
     return x
 
 
-# Copied from zipvoice/infer/infer_zipvoice.py, but call an external sample function
+# Copied from zipvoice/bin/infer_zipvoice.py, but call an external sample function
 def generate_sentence(
     save_path: str,
     prompt_text: str,
@@ -558,18 +540,18 @@ def generate_list(
             feat_scale=feat_scale,
             sampling_rate=sampling_rate,
         )
-        print(f"[Sentence: {i}] RTF: {metrics['rtf']:.4f}")
+        logging.info(f"[Sentence: {i}] RTF: {metrics['rtf']:.4f}")
         total_t.append(metrics["t"])
         total_t_no_vocoder.append(metrics["t_no_vocoder"])
         total_t_vocoder.append(metrics["t_vocoder"])
         total_wav_seconds.append(metrics["wav_seconds"])
 
-    print(f"Average RTF: {np.sum(total_t) / np.sum(total_wav_seconds):.4f}")
-    print(
+    logging.info(f"Average RTF: {np.sum(total_t) / np.sum(total_wav_seconds):.4f}")
+    logging.info(
         f"Average RTF w/o vocoder: "
         f"{np.sum(total_t_no_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
-    print(
+    logging.info(
         f"Average RTF vocoder: "
         f"{np.sum(total_t_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
@@ -600,7 +582,7 @@ def main():
     for param, value in model_specific_defaults.items():
         if getattr(params, param) is None:
             setattr(params, param, value)
-            print(f"Setting {param} to default value: {value}")
+            logging.info(f"Setting {param} to default value: {value}")
 
     assert (params.test_list is not None) ^ (
         (params.prompt_wav and params.prompt_text and params.text) is not None
@@ -609,27 +591,55 @@ def main():
         " or '--prompt-wav, --prompt-text and --text'."
     )
 
-    print("Loading model...")
-    if params.model_config is None:
+    if params.onnx_int8:
+        text_encoder_name = "text_encoder_int8.onnx"
+        fm_decoder_name = "fm_decoder_int8.onnx"
+    else:
+        text_encoder_name = "text_encoder.onnx"
+        fm_decoder_name = "fm_decoder.onnx"
+
+    if params.model_dir is not None:
+        params.model_dir = Path(params.model_dir)
+        if not params.model_dir.is_dir():
+            raise FileNotFoundError(f"{params.model_dir} does not exist")
+
+        for filename in [
+            text_encoder_name,
+            fm_decoder_name,
+            "model.json",
+            "tokens.txt",
+        ]:
+            if not (params.model_dir / filename).is_file():
+                raise FileNotFoundError(f"{params.model_dir / filename} does not exist")
+        text_encoder_path = params.model_dir / text_encoder_name
+        fm_decoder_path = params.model_dir / fm_decoder_name
+        model_config = params.model_dir / "model.json"
+        token_file = params.model_dir / "tokens.txt"
+        logging.info(f"Using local model dir {params.model_dir}.")
+    else:
+        logging.info("Using pretrained model from the huggingface")
+        logging.info("Downloading the requires files from HuggingFace")
+        text_encoder_path = hf_hub_download(
+            HUGGINGFACE_REPO,
+            filename=f"{MODEL_DIR[params.model_name]}/{text_encoder_name}",
+        )
+        fm_decoder_path = hf_hub_download(
+            HUGGINGFACE_REPO,
+            filename=f"{MODEL_DIR[params.model_name]}/{fm_decoder_name}",
+        )
         model_config = hf_hub_download(
-            HUGGINGFACE_REPO, filename=MODEL_CONFIG[params.model_name]
+            HUGGINGFACE_REPO, filename=f"{MODEL_DIR[params.model_name]}/model.json"
         )
-    else:
-        model_config = params.model_config
 
-    with open(model_config, "r") as f:
-        model_config = json.load(f)
-
-    if params.token_file is None:
         token_file = hf_hub_download(
-            HUGGINGFACE_REPO, filename=TOKEN_FILE[params.model_name]
+            HUGGINGFACE_REPO, filename=f"{MODEL_DIR[params.model_name]}/tokens.txt"
         )
-    else:
-        token_file = params.token_file
+
+    logging.info("Loading model...")
 
     if params.tokenizer == "emilia":
         tokenizer = EmiliaTokenizer(token_file=token_file)
-    elif params.dataset == "libritts":
+    elif params.tokenizer == "libritts":
         tokenizer = LibriTTSTokenizer(token_file=token_file)
     elif params.tokenizer == "espeak":
         tokenizer = EspeakTokenizer(token_file=token_file, lang=params.lang)
@@ -637,25 +647,8 @@ def main():
         assert params.tokenizer == "simple"
         tokenizer = SimpleTokenizer(token_file=token_file)
 
-    if params.onnx_model_dir is not None:
-        dirname = params.onnx_model_dir
-    else:
-        if params.model_name == "zipvoice_distill":
-            dirname = "zipvoice_distill"
-        else:
-            dirname = "zipvoice"
-
-    if not params.onnx_int8:
-        text_encoder_path = f"{dirname}/text_encoder.onnx"
-        fm_decoder_path = f"{dirname}/fm_decoder.onnx"
-    else:
-        text_encoder_path = f"{dirname}/text_encoder_int8.onnx"
-        fm_decoder_path = f"{dirname}/fm_decoder_int8.onnx"
-    if params.onnx_model_dir is None:
-        text_encoder_path = hf_hub_download(
-            HUGGINGFACE_REPO, filename=text_encoder_path
-        )
-        fm_decoder_path = hf_hub_download(HUGGINGFACE_REPO, filename=fm_decoder_path)
+    with open(model_config, "r") as f:
+        model_config = json.load(f)
 
     model = OnnxModel(text_encoder_path, fm_decoder_path)
 
@@ -670,7 +663,7 @@ def main():
         )
     params.sampling_rate = model_config["feature"]["sampling_rate"]
 
-    print("Start generating...")
+    logging.info("Start generating...")
     if params.test_list:
         os.makedirs(params.res_dir, exist_ok=True)
         generate_list(
@@ -706,10 +699,14 @@ def main():
             feat_scale=params.feat_scale,
             sampling_rate=params.sampling_rate,
         )
-    print("Done")
+    logging.info("Done")
 
 
 if __name__ == "__main__":
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
+
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
+
     main()

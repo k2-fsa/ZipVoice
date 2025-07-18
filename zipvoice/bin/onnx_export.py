@@ -23,10 +23,9 @@ Usage:
 
 python3 -m zipvoice.bin.onnx_export \
     --model-name zipvoice \
-    --token-file data/tokens_emilia.txt \
-    --checkpoint exp/zipvoice/epoch-11-avg-4.pt \
-    --model-config conf/zipvoice_base.json \
-    --onnx-model-dir exp/zipvoice_onnx
+    --model-dir exp/zipvoice \
+    --checkpoint-name epoch-11-avg-4.pt \
+    --onnx-model-dir exp/zipvoice
 
 `--model-name` can be `zipvoice` or `zipvoice_distill`,
     which are the models before and after distillation, respectively.
@@ -35,7 +34,8 @@ python3 -m zipvoice.bin.onnx_export \
 
 import argparse
 import json
-import os
+import logging
+from pathlib import Path
 from typing import Dict
 
 import onnx
@@ -73,25 +73,19 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--token-file",
+        "--model-dir",
         type=str,
-        default="data/tokens_emilia.txt",
-        help="The file that contains information that maps tokens to ids,"
-        "which is a text file with '{token}\t{token_id}' per line.",
+        default=None,
+        help="The model directory that contains model checkpoint, configuration "
+        "file model.json, and tokens file tokens.txt. Will download pre-trained "
+        "checkpoint from huggingface if not specified.",
     )
 
     parser.add_argument(
-        "--checkpoint",
+        "--checkpoint-name",
         type=str,
-        default="exp_zipvoice/epoch-11-avg-4.pt",
-        help="The model checkpoint.",
-    )
-
-    parser.add_argument(
-        "--model-config",
-        type=str,
-        default="conf/zipvoice_base.json",
-        help="The model configuration file.",
+        default="model.pt",
+        help="The name of model checkpoint.",
     )
 
     return parser
@@ -161,10 +155,10 @@ class OnnxTextModel(nn.Module):
 
 
 class OnnxFlowMatchingModel(nn.Module):
-    def __init__(self, model: nn.Module):
+    def __init__(self, model: nn.Module, distill: bool = False):
         """A wrapper for ZipVoice flow-matching decoder."""
         super().__init__()
-        self.distill = model.distill
+        self.distill = distill
         self.fm_decoder = model.fm_decoder
         self.model_func = getattr(model, "forward_fm_decoder")
         self.feat_dim = model.feat_dim
@@ -252,10 +246,10 @@ def export_text_encoder(
         "model_author": "k2-fsa",
         "comment": "ZipVoice text encoder",
     }
-    print(f"meta_data: {meta_data}")
+    logging.info(f"meta_data: {meta_data}")
     add_meta_data(filename=filename, meta_data=meta_data)
 
-    print(f"Exported to {filename}")
+    logging.info(f"Exported to {filename}")
 
 
 def export_fm_decoder(
@@ -307,10 +301,10 @@ def export_fm_decoder(
         "comment": "ZipVoice flow-matching decoder",
         "feat_dim": str(feat_dim),
     }
-    print(f"meta_data: {meta_data}")
+    logging.info(f"meta_data: {meta_data}")
     add_meta_data(filename=filename, meta_data=meta_data)
 
-    print(f"Exported to {filename}")
+    logging.info(f"Exported to {filename}")
 
 
 @torch.no_grad()
@@ -321,34 +315,41 @@ def main():
     params = AttributeDict()
     params.update(vars(args))
 
-    model_config = params.model_config
-    with open(model_config, "r") as f:
-        model_config = json.load(f)
-        for key, value in model_config["model"].items():
-            setattr(params, key, value)
-        for key, value in model_config["feature"].items():
-            setattr(params, key, value)
+    params.model_dir = Path(params.model_dir)
+    if not params.model_dir.is_dir():
+        raise FileNotFoundError(f"{params.model_dir} does not exist")
+    for filename in [params.checkpoint_name, "model.json", "tokens.txt"]:
+        if not (params.model_dir / filename).is_file():
+            raise FileNotFoundError(f"{params.model_dir / filename} does not exist")
+    model_ckpt = params.model_dir / params.checkpoint_name
+    model_config = params.model_dir / "model.json"
+    token_file = params.model_dir / "tokens.txt"
 
-    token_file = params.token_file
+    logging.info(f"Loading model from {params.model_dir}")
+
     tokenizer = SimpleTokenizer(token_file)
     tokenizer_config = {"vocab_size": tokenizer.vocab_size, "pad_id": tokenizer.pad_id}
+
+    with open(model_config, "r") as f:
+        model_config = json.load(f)
 
     if params.model_name == "zipvoice":
         model = ZipVoice(
             **model_config["model"],
             **tokenizer_config,
         )
+        distill = False
     else:
         assert params.model_name == "zipvoice_distill"
         model = ZipVoiceDistill(
             **model_config["model"],
             **tokenizer_config,
         )
-    model_ckpt = params.checkpoint
+        distill = True
 
-    if model_ckpt.endswith(".safetensors"):
+    if str(model_ckpt).endswith(".safetensors"):
         safetensors.torch.load_model(model, model_ckpt)
-    elif model_ckpt.endswith(".pt"):
+    elif str(model_ckpt).endswith(".pt"):
         load_checkpoint(filename=model_ckpt, model=model, strict=True)
     else:
         raise NotImplementedError(f"Unsupported model checkpoint format: {model_ckpt}")
@@ -359,29 +360,30 @@ def main():
 
     convert_scaled_to_non_scaled(model, inplace=True, is_onnx=True)
 
-    print("Exporting model")
-    os.makedirs(params.onnx_model_dir, exist_ok=True)
+    logging.info("Exporting model")
+    onnx_model_dir = Path(params.onnx_model_dir)
+    onnx_model_dir.mkdir(parents=True, exist_ok=True)
     opset_version = 11
 
     text_encoder = OnnxTextModel(model=model)
-    text_encoder_file = f"{params.onnx_model_dir}/text_encoder.onnx"
+    text_encoder_file = onnx_model_dir / "text_encoder.onnx"
     export_text_encoder(
         model=text_encoder,
         filename=text_encoder_file,
         opset_version=opset_version,
     )
 
-    fm_decoder = OnnxFlowMatchingModel(model=model)
-    fm_decoder_file = f"{params.onnx_model_dir}/fm_decoder.onnx"
+    fm_decoder = OnnxFlowMatchingModel(model=model, distill=distill)
+    fm_decoder_file = onnx_model_dir / "fm_decoder.onnx"
     export_fm_decoder(
         model=fm_decoder,
         filename=fm_decoder_file,
         opset_version=opset_version,
     )
 
-    print("Generate int8 quantization models")
+    logging.info("Generate int8 quantization models")
 
-    text_encoder_int8_file = f"{params.onnx_model_dir}/text_encoder_int8.onnx"
+    text_encoder_int8_file = onnx_model_dir / "text_encoder_int8.onnx"
     quantize_dynamic(
         model_input=text_encoder_file,
         model_output=text_encoder_int8_file,
@@ -389,7 +391,7 @@ def main():
         weight_type=QuantType.QInt8,
     )
 
-    fm_decoder_int8_file = f"{params.onnx_model_dir}/fm_decoder_int8.onnx"
+    fm_decoder_int8_file = onnx_model_dir / "fm_decoder_int8.onnx"
     quantize_dynamic(
         model_input=fm_decoder_file,
         model_output=fm_decoder_int8_file,
@@ -397,8 +399,12 @@ def main():
         weight_type=QuantType.QInt8,
     )
 
-    print("Done!")
+    logging.info("Done!")
 
 
 if __name__ == "__main__":
+
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
+
     main()

@@ -38,7 +38,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
             --lr-hours 30000 \
             --model-config conf/zipvoice_base.json \
             --tokenizer emilia \
-            --token-file "data/tokens_emilia.txt" \
+            --token-file data/tokens_emilia.txt \
             --dataset emilia \
             --manifest-dir data/fbank \
             --exp-dir exp/zipvoice
@@ -50,8 +50,6 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
             --epoch 11 \
             --avg 4 \
             --model-name zipvoice \
-            --model-config conf/zipvoice_base.json \
-            --token-file data/tokens_emilia.txt \
             --exp-dir exp/zipvoice
       # The generated model is exp/zipvoice/epoch-11-avg-4.pt
 fi
@@ -82,8 +80,6 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --iter 60000 \
             --avg 7 \
             --model-name zipvoice_distill \
-            --model-config conf/zipvoice_base.json \
-            --token-file data/tokens_emilia.txt \
             --exp-dir exp/zipvoice_distill_1stage
       # The generated model is exp/zipvoice_distill_1stage/iter-60000-avg-7.pt
 fi
@@ -103,9 +99,9 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
             --token-file data/tokens_emilia.txt \
             --dataset emilia \
             --manifest-dir data/fbank \
-            --teacher-model zipvoice/exp_zipvoice_distill_1stage/iter-60000-avg-7.pt \
+            --teacher-model exp/zipvoice_distill_1stage/iter-60000-avg-7.pt \
             --distill-stage second \
-            --exp-dir zipvoice/exp_zipvoice_distill
+            --exp-dir exp/zipvoice_distill
 fi
 
 ### Export ONNX model (7 - 8)
@@ -114,20 +110,18 @@ if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
       echo "Stage 7: Export ZipVoice ONNX model"
       python3 -m zipvoice.bin.onnx_export \
             --model-name zipvoice \
-            --token-file data/tokens_emilia.txt \
-            --checkpoint exp/zipvoice/epoch-11-avg-4.pt \
-            --model-config conf/zipvoice_base.json \
-            --onnx-model-dir exp/zipvoice
+            --model-dir exp/zipvoice/ \
+            --checkpoint-name epoch-11-avg-4.pt \
+            --onnx-model-dir exp/zipvoice/
 fi
 
 if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
       echo "Stage 8: Export ZipVoice-Distill ONNX model"
       python3 -m zipvoice.bin.onnx_export \
             --model-name zipvoice_distill \
-            --token-file data/tokens_emilia.txt \
-            --checkpoint exp/zipvoice_distill/checkpoint-2000.pt \
-            --model-config conf/zipvoice_base.json \
-            --onnx-model-dir exp/zipvoice_distill_onnx
+            --model-dir exp/zipvoice_distill/ \
+            --checkpoint-name checkpoint-2000.pt \
+            --onnx-model-dir exp/zipvoice_distill/
 fi
 
 
@@ -137,10 +131,9 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
       echo "Stage 9: Inference of the ZipVoice model"
       python3 -m zipvoice.bin.infer_zipvoice \
             --model-name zipvoice \
-            --checkpoint exp/zipvoice/epoch-11-avg-4.pt \
-            --model-config conf/zipvoice_base.json \
+            --model-dir exp/zipvoice/ \
+            --checkpoint-name epoch-11-avg-4.pt \
             --tokenizer emilia \
-            --token-file data/tokens_emilia.txt \
             --test-list test.tsv \
             --res-dir results/test \
             --num-step 16 \
@@ -152,10 +145,9 @@ if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
       echo "Stage 10: Inference of the ZipVoice-Distill model"
       python3 zipvoice.bin.infer_zipvoice \
             --model-name zipvoice_distill \
-            --checkpoint exp/zipvoice_distill/checkpoint-2000.pt \
-            --model-config conf/zipvoice_base.json \
+            --model-dir exp/zipvoice_distill/ \
+            --checkpoint-name checkpoint-2000.pt \
             --tokenizer emilia \
-            --token-file "data/tokens_emilia.txt" \
             --test-list test.tsv \
             --res-dir results/test_distill \
             --num-step 8 \
@@ -168,10 +160,8 @@ if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
       python3 -m zipvoice.bin.infer_zipvoice_onnx \
             --model-name zipvoice \
             --onnx-int8 False \
-            --onnx-model-dir exp/zipvoice_onnx \
-            --model-config conf/zipvoice_base.json \
+            --model-dir exp/zipvoice \
             --tokenizer emilia \
-            --token-file data/tokens_emilia.txt \
             --test-list test.tsv \
             --res-dir results/test_onnx
 fi
@@ -179,12 +169,10 @@ fi
 if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
       echo "Stage 12: Inference with ZipVoic-Distill ONNX model"
       python3 -m zipvoice.bin.infer_zipvoice_onnx \
-            --model-name zipvoice \
+            --model-name zipvoice_distill \
             --onnx-int8 False \
-            --onnx-model-dir exp/zipvoice_distill_onnx \
-            --model-config conf/zipvoice_base.json \
+            --model-dir exp/zipvoice_distill \
             --tokenizer emilia \
-            --token-file data/tokens_emilia.txt \
             --test-list test.tsv \
             --res-dir results/test_distill_onnx
 fi

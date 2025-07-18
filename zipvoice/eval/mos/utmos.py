@@ -28,7 +28,7 @@ import torch
 from tqdm import tqdm
 
 from zipvoice.eval.models.utmos import UTMOS22Strong
-from zipvoice.eval.utils import load_waveform, setup_console_logger
+from zipvoice.eval.utils import load_waveform
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -144,7 +144,10 @@ if __name__ == "__main__":
 
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    setup_console_logger()
+
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
+
     parser = get_parser()
     args = parser.parse_args()
 

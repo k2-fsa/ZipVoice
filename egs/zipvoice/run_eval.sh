@@ -16,10 +16,12 @@ stop_stage=7
 
 download_dir=download/
 
+# Uncomment this line to use HF mirror
+# export HF_ENDPOINT=https://hf-mirror.com
+
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
       echo "Stage 1: Download test sets (LibriSpeech-PC and Seed-TTS)"
-      # Uncomment this line to use HF mirror
-      # export HF_ENDPOINT=https://hf-mirror.com
+
       hf_repo=k2-fsa/TTS_eval_datasets
       mkdir -p ${download_dir}/
       for file in librispeech_pc_testset.tar.gz seedtts_testset.tar.gz; do
@@ -37,8 +39,6 @@ fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
       echo "Stage 2: Download all required evaluation models"
-      # Uncomment this line to use HF mirror
-      # export HF_ENDPOINT=https://hf-mirror.com
       hf_repo=k2-fsa/TTS_eval_models
       mkdir -p ${download_dir}/tts_eval_models
       huggingface-cli download \
@@ -46,22 +46,9 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
         ${hf_repo}
 fi
 
-if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
-      echo "Stage 3: Download pre-trained model, tokens file, and model config"
-      # Uncomment this line to use HF mirror
-      # export HF_ENDPOINT=https://hf-mirror.com
-      hf_repo=k2-fsa/ZipVoice
-      mkdir -p ${download_dir}
-      for file in model.pt tokens.txt model.json; do
-            huggingface-cli download \
-                  --local-dir ${download_dir} \
-                  ${hf_repo} \
-                  zipvoice/${file}
-      done
-fi
 
-if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
-      echo "Stage 4: Inference with the pre-trained ZipVoice model"
+if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
+      echo "Stage 3: Inference with the pre-trained ZipVoice model from huggingface"
 
       for testset in librispeech_pc seedtts_en seedtts_zh; do 
 
@@ -79,9 +66,6 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
         echo "Inference on tetset ${testset}..."
         python3 -m zipvoice.bin.infer_zipvoice \
                 --model-name zipvoice \
-                --checkpoint ${download_dir}/zipvoice/model.pt \
-                --model-config ${download_dir}/zipvoice/model.json \
-                --token-file ${download_dir}/zipvoice/tokens.txt \
                 --test-list ${test_tsv} \
                 --res-dir results/${testset}
       done
@@ -89,8 +73,8 @@ fi
 
 
 
-if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
-      echo "Stage 5: Evaluation on LibriSpeech-PC"
+if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
+      echo "Stage 4: Evaluation on LibriSpeech-PC"
       model_path=${download_dir}/tts_eval_models
       wav_path=results/librispeech_pc
       test_tsv=${download_dir}/librispeech_pc_testset/test.tsv
@@ -113,8 +97,8 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
 fi
 
 
-if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
-      echo "Stage 6: Evaluation on Seed-TTS test en"
+if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
+      echo "Stage 5: Evaluation on Seed-TTS test en"
       model_path=${download_dir}/tts_eval_models
       wav_path=results/seedtts_en
       test_tsv=${download_dir}/seedtts_testset/en/test.tsv
@@ -135,8 +119,8 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
             --model-dir ${model_path} 
 fi
 
-if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
-      echo "Stage 7: Evaluation on Seed-TTS test en"
+if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
+      echo "Stage 6: Evaluation on Seed-TTS test en"
       model_path=${download_dir}/tts_eval_models
       wav_path=results/seedtts_zh
       test_tsv=${download_dir}/seedtts_testset/zh/test.tsv

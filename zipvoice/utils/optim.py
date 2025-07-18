@@ -613,7 +613,7 @@ class ScaledAdam(BatchedOptimizer):
         if ans < 1.0:
             first_state["num_clipped"] += 1
         if ans < 0.5:
-            logging.warning(
+            logging.debug(
                 f"Scaling gradients by {ans}, "
                 f"model_norm_threshold={model_norm_threshold}"
             )

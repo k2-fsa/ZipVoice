@@ -6,12 +6,15 @@ import os
 import socket
 import subprocess
 import sys
+import warnings
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
 import torch
+from packaging import version
 from torch import distributed as dist
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -134,6 +137,44 @@ class MetricsTracker(collections.defaultdict):
         """
         for k, v in self.norm_items():
             tb_writer.add_scalar(prefix + k, v, batch_idx)
+
+
+@contextmanager
+def torch_autocast(device_type="cuda", **kwargs):
+    """
+    To fix the following warnings:
+    FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated.
+    Please use `torch.amp.autocast('cuda', args...)` instead.
+      with torch.cuda.amp.autocast(enabled=False):
+    """
+    if version.parse(torch.__version__) >= version.parse("2.3.0"):
+        # Use new unified API
+        with torch.amp.autocast(device_type=device_type, **kwargs):
+            yield
+    else:
+        # Suppress deprecation warning and use old CUDA-specific autocast
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            with torch.cuda.amp.autocast(**kwargs):
+                yield
+
+
+def create_grad_scaler(device="cuda", **kwargs):
+    """
+    Creates a GradScaler compatible with both torch < 2.3.0 and >= 2.3.0.
+    Accepts all kwargs like: enabled, init_scale, growth_factor, etc.
+
+    FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated.
+    Please use `torch.amp.GradScaler('cuda', args...)` instead.
+    """
+    if version.parse(torch.__version__) >= version.parse("2.3.0"):
+        from torch.amp import GradScaler
+
+        return GradScaler(device=device, **kwargs)
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            return torch.cuda.amp.GradScaler(**kwargs)
 
 
 def setup_dist(

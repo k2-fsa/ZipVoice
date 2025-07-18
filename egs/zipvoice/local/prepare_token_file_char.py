@@ -29,14 +29,12 @@ def get_args():
     parser.add_argument(
         "--tokens",
         type=Path,
-        default=Path("data/tokens_libritts.txt"),
         help="Path to the dict that maps the text tokens to IDs",
     )
 
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path("data/fbank/libritts_cuts_train-all-shuf.jsonl.gz"),
         help="Path to the manifest file",
     )
 

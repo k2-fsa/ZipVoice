@@ -85,7 +85,7 @@ def get_token2id(args):
 
 if __name__ == "__main__":
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-    logging.basicConfig(format=formatter, level=logging.INFO)
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
 
     args = get_args()
     get_token2id(args)

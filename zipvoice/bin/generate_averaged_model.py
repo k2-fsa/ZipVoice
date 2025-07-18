@@ -22,9 +22,7 @@ This script loads checkpoints and averages them.
 python3 -m zipvoice.bin.generate_averaged_model  \
     --epoch 11 \
     --avg 4 \
-    --model_name zipvoice \
-    --model-config conf/zipvoice_base.json \
-    --token-file data/tokens_emilia.txt \
+    --model-name zipvoice \
     --exp-dir exp/zipvoice
 
 It will generate a file `epoch-11-avg-14.pt` in the given `exp_dir`.
@@ -33,6 +31,7 @@ You can later load it by `torch.load("epoch-11-avg-4.pt")`.
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 import torch
@@ -84,12 +83,12 @@ def get_parser():
     parser.add_argument(
         "--exp-dir",
         type=str,
-        default="zipvoice/exp_zipvoice",
+        default="exp/zipvoice",
         help="The experiment dir",
     )
 
     parser.add_argument(
-        "--model_name",
+        "--model-name",
         type=str,
         default="zipvoice",
         choices=[
@@ -101,22 +100,6 @@ def get_parser():
         help="The model type to be averaged. ",
     )
 
-    parser.add_argument(
-        "--model-config",
-        type=str,
-        default="conf/zipvoice_base.json",
-        help="The model configuration file.",
-    )
-
-    parser.add_argument(
-        "--token-file",
-        type=str,
-        default="data/tokens_emilia.txt",
-        help="The file that contains information that maps tokens to ids,"
-        "which is a text file with '{token}\t{token_id}' per line if type is"
-        "char or phone, otherwise it is a bpe_model file.",
-    )
-
     return parser
 
 
@@ -124,14 +107,16 @@ def get_parser():
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    args.exp_dir = Path(args.exp_dir)
     params = AttributeDict()
     params.update(vars(args))
+    params.exp_dir = Path(params.exp_dir)
 
-    with open(params.model_config, "r") as f:
+    with open(params.exp_dir / "model.json", "r") as f:
         model_config = json.load(f)
 
-    tokenizer = SimpleTokenizer(token_file=params.token_file)
+    # Any tokenizer can be used here.
+    # Use SimpleTokenizer for simplicity.
+    tokenizer = SimpleTokenizer(token_file=params.exp_dir / "tokens.txt")
     if params.model_name in ["zipvoice", "zipvoice_distill"]:
         tokenizer_config = {
             "vocab_size": tokenizer.vocab_size,
@@ -147,12 +132,12 @@ def main():
 
     params.suffix = f"epoch-{params.epoch}-avg-{params.avg}"
 
-    print("Script started")
+    logging.info("Script started")
 
     params.device = torch.device("cpu")
-    print(f"Device: {params.device}")
+    logging.info(f"Device: {params.device}")
 
-    print("About to create model")
+    logging.info("About to create model")
     if params.model_name == "zipvoice":
         model = ZipVoice(
             **model_config["model"],
@@ -191,7 +176,7 @@ def main():
             )
         filename_start = filenames[-1]
         filename_end = filenames[0]
-        print(
+        logging.info(
             "Calculating the averaged model over iteration checkpoints"
             f" from {filename_start} (excluded) to {filename_end}"
         )
@@ -210,7 +195,7 @@ def main():
         assert start >= 1, start
         filename_start = f"{params.exp_dir}/epoch-{start}.pt"
         filename_end = f"{params.exp_dir}/epoch-{params.epoch}.pt"
-        print(
+        logging.info(
             f"Calculating the averaged model over epoch range from "
             f"{start} (excluded) to {params.epoch}"
         )
@@ -227,13 +212,18 @@ def main():
         filename = params.exp_dir / f"iter-{params.iter}-avg-{params.avg}.pt"
     else:
         filename = params.exp_dir / f"epoch-{params.epoch}-avg-{params.avg}.pt"
+
+    logging.info(f"Saving the averaged checkpoint to {filename}")
     torch.save({"model": model.state_dict()}, filename)
 
     num_param = sum([p.numel() for p in model.parameters()])
-    print(f"Number of model parameters: {num_param}")
+    logging.info(f"Number of model parameters: {num_param}")
 
-    print("Done!")
+    logging.info("Done!")
 
 
 if __name__ == "__main__":
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
+
     main()

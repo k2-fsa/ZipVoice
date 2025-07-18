@@ -49,12 +49,17 @@ import torch.nn as nn
 from lhotse.cut import Cut, CutSet
 from lhotse.utils import fix_random_seed
 from torch import Tensor
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.utils.tensorboard import SummaryWriter
 
 import zipvoice.utils.diagnostics as diagnostics
+from zipvoice.bin.train_zipvoice import (
+    display_and_save_batch,
+    get_params,
+    tokenize_text,
+)
 from zipvoice.dataset.datamodule import TtsDataModule
 from zipvoice.models.zipvoice_dialog import ZipVoiceDialog
 from zipvoice.tokenizer.tokenizer import DialogTokenizer
@@ -71,14 +76,15 @@ from zipvoice.utils.common import (
     AttributeDict,
     MetricsTracker,
     cleanup_dist,
+    create_grad_scaler,
     get_adjusted_batch_count,
-    get_env_info,
     get_parameter_groups_with_lrs,
     prepare_input,
     set_batch_count,
     setup_dist,
     setup_logger,
     str2bool,
+    torch_autocast,
 )
 from zipvoice.utils.hooks import register_inf_check_hooks
 from zipvoice.utils.lr_scheduler import FixedLRScheduler, LRScheduler
@@ -315,56 +321,6 @@ def get_parser():
     return parser
 
 
-def get_params() -> AttributeDict:
-    """Return a dict containing training parameters.
-
-    All training related parameters that are not passed from the commandline
-    are saved in the variable `params`.
-
-    Commandline options are merged into `params` after they are parsed, so
-    you can also access them via `params`.
-
-    Explanation of options saved in `params`:
-
-        - best_train_loss: Best training loss so far. It is used to select
-                           the model that has the lowest training loss. It is
-                           updated during the training.
-
-        - best_valid_loss: Best validation loss so far. It is used to select
-                           the model that has the lowest validation loss. It is
-                           updated during the training.
-
-        - best_train_epoch: It is the epoch that has the best training loss.
-
-        - best_valid_epoch: It is the epoch that has the best validation loss.
-
-        - batch_idx_train: Used to writing statistics to tensorboard. It
-                           contains number of batches trained so far across
-                           epochs.
-
-        - log_interval:  Print training loss if batch_idx % log_interval` is 0
-
-        - reset_interval: Reset statistics if batch_idx % reset_interval is 0
-
-        - env_info:  A dict containing information about the environment.
-
-    """
-    params = AttributeDict(
-        {
-            "best_train_loss": float("inf"),
-            "best_valid_loss": float("inf"),
-            "best_train_epoch": -1,
-            "best_valid_epoch": -1,
-            "batch_idx_train": 0,
-            "log_interval": 50,
-            "reset_interval": 200,
-            "env_info": get_env_info(),
-        }
-    )
-
-    return params
-
-
 def compute_fbank_loss(
     params: AttributeDict,
     model: Union[nn.Module, DDP],
@@ -500,8 +456,7 @@ def train_one_epoch(
             set_batch_count(model, get_adjusted_batch_count(params) + 100000)
 
         if (
-            params.valid_interval is not None
-            and params.batch_idx_train > 0
+            params.batch_idx_train > 0
             and params.batch_idx_train % params.valid_interval == 0
             and not params.print_diagnostics
         ):
@@ -539,7 +494,7 @@ def train_one_epoch(
         )
 
         try:
-            with autocast("cuda", enabled=params.use_fp16):
+            with torch_autocast(dtype=torch.float16, enabled=params.use_fp16):
                 loss, loss_info = compute_fbank_loss(
                     params=params,
                     model=model,
@@ -700,35 +655,6 @@ def compute_validation_loss(
     return tot_loss
 
 
-def display_and_save_batch(
-    batch: dict,
-    params: AttributeDict,
-) -> None:
-    """Display the batch statistics and save the batch into disk.
-
-    Args:
-      batch:
-        A batch of data. See `lhotse.dataset.K2SpeechRecognitionDataset()`
-        for the content in it.
-      params:
-        Parameters for training. See :func:`get_params`.
-      sp:
-        The BPE model.
-    """
-    from lhotse.utils import uuid4
-
-    filename = f"{params.exp_dir}/batch-{uuid4()}.pt"
-    logging.info(f"Saving batch to {filename}")
-    torch.save(batch, filename)
-
-    features = batch["features"]
-    tokens = batch["tokens"]
-
-    logging.info(f"features shape: {features.shape}")
-    num_tokens = sum(len(i) for i in tokens)
-    logging.info(f"num tokens: {num_tokens}")
-
-
 def scan_pessimistic_batches_for_oom(
     model: Union[nn.Module, DDP],
     train_dl: torch.utils.data.DataLoader,
@@ -753,7 +679,7 @@ def scan_pessimistic_batches_for_oom(
             return_feature=True,
         )
         try:
-            with autocast("cuda", enabled=params.use_fp16):
+            with torch_autocast(dtype=torch.float16, enabled=params.use_fp16):
 
                 loss, loss_info = compute_fbank_loss(
                     params=params,
@@ -780,13 +706,6 @@ def scan_pessimistic_batches_for_oom(
             f"Maximum memory allocated so far is "
             f"{torch.cuda.max_memory_allocated() // 1000000}MB"
         )
-
-
-def tokenize_text(c: Cut, tokenizer):
-    text = c.supervisions[0].text
-    tokens = tokenizer.texts_to_token_ids([text])
-    c.supervisions[0].tokens = tokens[0]
-    return c
 
 
 def run(rank, world_size, args):
@@ -817,7 +736,7 @@ def run(rank, world_size, args):
         setup_dist(rank, world_size, params.master_port)
 
     os.makedirs(f"{params.exp_dir}", exist_ok=True)
-    copyfile(src=params.model_config, dst=f"{params.exp_dir}/zipvoice_base.json")
+    copyfile(src=params.model_config, dst=f"{params.exp_dir}/model.json")
     copyfile(src=params.token_file, dst=f"{params.exp_dir}/tokens.txt")
     setup_logger(f"{params.exp_dir}/log/log-train")
 
@@ -896,7 +815,7 @@ def run(rank, world_size, args):
 
     scheduler = FixedLRScheduler(optimizer)
 
-    scaler = GradScaler("cuda", enabled=params.use_fp16)
+    scaler = create_grad_scaler(enabled=params.use_fp16)
 
     if params.start_epoch > 1 and checkpoints is not None:
         # load state_dict for optimizers
@@ -958,6 +877,13 @@ def run(rank, world_size, args):
         # To avoid OOM issues due to too long dev cuts
         dev_cuts = dev_cuts.filter(_remove_short_and_long_utt)
 
+    if not hasattr(train_cuts[0].supervisions[0], "tokens") or not hasattr(
+        dev_cuts[0].supervisions[0], "tokens"
+    ):
+        logging.warning(
+            "Tokens are not prepared, will tokenize on-the-fly, "
+            "which can slow down training significantly."
+        )
     _tokenize_text = partial(tokenize_text, tokenizer=tokenizer)
     train_cuts = train_cuts.map(_tokenize_text)
     dev_cuts = dev_cuts.map(_tokenize_text)

@@ -184,7 +184,7 @@ def preprocess_emilia(file_name: str, input_dir: Path, output_dir: Path):
 
 if __name__ == "__main__":
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-    logging.basicConfig(format=formatter, level=logging.INFO)
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
 
     args = get_args()
 

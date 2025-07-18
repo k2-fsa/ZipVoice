@@ -23,6 +23,7 @@ from functools import reduce
 from typing import Dict, List, Optional
 
 import jieba
+from lhotse import CutSet
 from pypinyin import Style, lazy_pinyin
 from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
 
@@ -36,6 +37,8 @@ except Exception as ex:
         "pip install piper_phonemize -f \
             https://k2-fsa.github.io/icefall/piper_phonemize.html"
     )
+
+jieba.default_logger.setLevel(logging.INFO)
 
 
 class Tokenizer(ABC):
@@ -499,8 +502,9 @@ class EmiliaTokenizer(Tokenizer):
 class DialogTokenizer(EmiliaTokenizer):
     def __init__(self, token_file: Optional[str] = None, token_type="phone"):
         super().__init__(token_file=token_file, token_type=token_type)
-        self.spk_a_id = self.token2id["[S1]"]
-        self.spk_b_id = self.token2id["[S2]"]
+        if token_file:
+            self.spk_a_id = self.token2id["[S1]"]
+            self.spk_b_id = self.token2id["[S2]"]
 
     def preprocess_text(
         self,
@@ -605,6 +609,32 @@ class LibriTTSTokenizer(Tokenizer):
             token_ids_list.append(token_ids)
 
         return token_ids_list
+
+
+def add_tokens(cut_set: CutSet, tokenizer: str):
+    if tokenizer == "emilia":
+        tokenizer = EmiliaTokenizer()
+    elif tokenizer == "espeak":
+        tokenizer = EspeakTokenizer()
+    elif tokenizer == "dialog":
+        tokenizer = DialogTokenizer()
+    elif tokenizer == "libritts":
+        tokenizer = LibriTTSTokenizer()
+    elif tokenizer == "simple":
+        tokenizer = SimpleTokenizer()
+    else:
+        raise ValueError(f"Unsupported tokenizer: {tokenizer}.")
+
+    def _prepare_cut(cut):
+        # Each cut only contains one supervision
+        assert len(cut.supervisions) == 1, (len(cut.supervisions), cut)
+        text = cut.supervisions[0].text
+        tokens = tokenizer.texts_to_tokens([text])[0]
+        cut.supervisions[0].tokens = tokens
+        return cut
+
+    cut_set = cut_set.map(_prepare_cut)
+    return cut_set
 
 
 if __name__ == "__main__":

@@ -129,7 +129,7 @@ def _parse_supervision(
             text=text.strip(),
         )
     except Exception as e:
-        print(f"Error processing line: {e}")
+        logging.info(f"Error processing line: {e}")
         return None
 
 
@@ -149,10 +149,10 @@ def prepare_subset(
     :param num_jobs: Number of processes for parallel processing
     :param output_dir: Path where to write the manifests
     """
-    print(f"Preparing {lang} subset")
+    logging.info(f"Preparing {lang} subset")
 
     # Step 1: Read all unique recording paths
-    print(f"Reading {jsonl_path}")
+    logging.info(f"Reading {jsonl_path}")
     recordings_path_set = set()
     supervision_list = list()
     with open(jsonl_path, "r") as fr:
@@ -164,9 +164,9 @@ def prepare_subset(
                 recordings_path_set.add(jsonl_path.parent / wav_path)
                 supervision_list.append((uniq_id, text, wav_path, start, end))
             except Exception as e:
-                print(f"Error {e} when decoding JSON line: {line}")
+                logging.warning(f"Error {e} when decoding JSON line: {line}")
                 continue
-    print("Starting to process recordings...")
+    logging.info("Starting to process recordings...")
     # Step 2: Process recordings
     futures = []
     recording_dict = {}
@@ -185,7 +185,7 @@ def prepare_subset(
 
         recording_set = RecordingSet.from_recordings(recording_dict.values())
 
-    print("Starting to process supervisions...")
+    logging.info("Starting to process supervisions...")
     # Step 3: Process supervisions
     supervisions = []
     for supervision in tqdm(supervision_list, desc="Processing supervisions"):
@@ -193,7 +193,7 @@ def prepare_subset(
         if seg is not None:
             supervisions.append(seg)
 
-    print("Processing Cuts...")
+    logging.info("Processing Cuts...")
 
     # Step 4: Create and validate manifests
     supervision_set = SupervisionSet.from_segments(supervisions)
@@ -210,11 +210,11 @@ def prepare_subset(
         cut_set = cut_set.resample(sampling_rate)
     cut_set = cut_set.trim_to_supervisions(keep_overlapping=False)
 
-    print("Saving cuts to disk...")
+    logging.info("Saving cuts to disk...")
     # Step 5: Write manifests to disk
-    cut_set.to_file(output_dir / f"opendialog_cuts_{lang.upper()}-all.jsonl.gz")
+    cut_set.to_file(output_dir / f"opendialog_cuts_raw_{lang.upper()}-all.jsonl.gz")
     dev_cut_set = cut_set.subset(first=1000)
-    dev_cut_set.to_file(output_dir / f"opendialog_cuts_{lang.upper()}-dev.jsonl.gz")
+    dev_cut_set.to_file(output_dir / f"opendialog_cuts_raw_{lang.upper()}-dev.jsonl.gz")
 
     def remove_dev(c: Cut, set: set):
         if c.id in set:
@@ -223,7 +223,9 @@ def prepare_subset(
 
     _remove_dev = partial(remove_dev, set=set(dev_cut_set.ids))
     train_cut_set = cut_set.filter(_remove_dev)
-    train_cut_set.to_file(output_dir / f"opendialog_cuts_{lang.upper()}-train.jsonl.gz")
+    train_cut_set.to_file(
+        output_dir / f"opendialog_cuts_raw_{lang.upper()}-train.jsonl.gz"
+    )
 
 
 def prepare_dataset(
@@ -245,7 +247,7 @@ def prepare_dataset(
 
 if __name__ == "__main__":
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
-    logging.basicConfig(format=formatter, level=logging.INFO)
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
 
     args = get_args()
     dataset_path = Path(args.dataset_path)

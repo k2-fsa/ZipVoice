@@ -84,14 +84,34 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
 
 fi
 
+
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
-  log "Stage 3: Extract Fbank for Emilia"
+  log "Stage 3: Add tokens to manifests"
+
+  mkdir -p data/manifests/tokenized_splits
+
+  if [ ! -e data/manifests/tokenized_splits/.emilia.preprocess.done ]; then
+    for subset in EN ZH; do 
+      log "Tokenizing Emilia ${subset}"
+      python local/prepare_emilia.py \
+        --subset ${subset} \
+        --jobs ${nj} \
+        --source-dir data/manifests/splits/ \
+        --output-dir data/manifests/tokenized_splits/
+    done
+    touch data/manifests/tokenized_splits/.emilia.preprocess.done
+  fi
+
+fi
+
+if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
+  log "Stage 4: Extract Fbank for Emilia"
   mkdir -p data/fbank/emilia_splits
   if [ ! -e data/fbank/emilia_splits/.emilia.fbank.done ]; then
     # You can speed up the extraction by distributing splits to multiple machines.
     for subset in EN ZH; do
       python3 -m zipvoice.bin.compute_fbank \
-        --source-dir data/manifests/splits \
+        --source-dir data/manifests/tokenized_splits \
         --dest-dir data/fbank/emilia_splits \
         --dataset emilia \
         --subset ${subset} \
@@ -121,8 +141,8 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
 
 fi
 
-if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
-  log "Stage 4: Generate token file"
+if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
+  log "Stage 5: Generate token file"
   if [ ! -e data/tokens_emilia.txt ]; then
     ./local/prepare_token_file_emilia.py --tokens data/tokens_emilia.txt
   fi

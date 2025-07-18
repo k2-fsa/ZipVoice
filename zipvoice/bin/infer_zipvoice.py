@@ -29,7 +29,7 @@ export HF_ENDPOINT=https://hf-mirror.com
 (1) Inference of a single sentence:
 
 python3 -m zipvoice.bin.infer_zipvoice \
-    --model-name "zipvoice" \
+    --model-name zipvoice \
     --prompt-wav prompt.wav \
     --prompt-text "I am a prompt." \
     --text "I am a sentence." \
@@ -38,7 +38,7 @@ python3 -m zipvoice.bin.infer_zipvoice \
 (2) Inference of a list of sentences:
 
 python3 -m zipvoice.bin.infer_zipvoice \
-    --model-name "zipvoice" \
+    --model-name zipvoice \
     --test-list test.tsv \
     --res-dir results
 
@@ -52,7 +52,9 @@ Each line of `test.tsv` is in the format of
 import argparse
 import datetime as dt
 import json
+import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -76,17 +78,9 @@ from zipvoice.utils.common import AttributeDict
 from zipvoice.utils.feature import VocosFbank
 
 HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
-PRETRAINED_MODEL = {
-    "zipvoice": "zipvoice/model.pt",
-    "zipvoice_distill": "zipvoice_distill/model.pt",
-}
-TOKEN_FILE = {
-    "zipvoice": "zipvoice/tokens.txt",
-    "zipvoice_distill": "zipvoice_distill/tokens.txt",
-}
-MODEL_CONFIG = {
-    "zipvoice": "zipvoice/zipvoice_base.json",
-    "zipvoice_distill": "zipvoice_distill/zipvoice_base.json",
+MODEL_DIR = {
+    "zipvoice": "zipvoice",
+    "zipvoice_distill": "zipvoice_distill",
 }
 
 
@@ -104,19 +98,19 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--checkpoint",
+        "--model-dir",
         type=str,
         default=None,
-        help="The model checkpoint. "
-        "Will download pre-trained checkpoint from huggingface if not specified.",
+        help="The model directory that contains model checkpoint, configuration "
+        "file model.json, and tokens file tokens.txt. Will download pre-trained "
+        "checkpoint from huggingface if not specified.",
     )
 
     parser.add_argument(
-        "--model-config",
+        "--checkpoint-name",
         type=str,
-        default=None,
-        help="The model configuration file. "
-        "Will download zipvoice_base.json from huggingface if not specified.",
+        default="model.pt",
+        help="The name of model checkpoint.",
     )
 
     parser.add_argument(
@@ -125,15 +119,6 @@ def get_parser():
         default=None,
         help="The vocoder checkpoint. "
         "Will download pre-trained vocoder from huggingface if not specified.",
-    )
-
-    parser.add_argument(
-        "--token-file",
-        type=str,
-        default=None,
-        help="The file that contains information that maps tokens to ids,"
-        "which is a text file with '{token}\t{token_id}' per line. "
-        "Will download tokens_emilia.txt from huggingface if not specified.",
     )
 
     parser.add_argument(
@@ -440,18 +425,18 @@ def generate_list(
             feat_scale=feat_scale,
             sampling_rate=sampling_rate,
         )
-        print(f"[Sentence: {i}] RTF: {metrics['rtf']:.4f}")
+        logging.info(f"[Sentence: {i}] RTF: {metrics['rtf']:.4f}")
         total_t.append(metrics["t"])
         total_t_no_vocoder.append(metrics["t_no_vocoder"])
         total_t_vocoder.append(metrics["t_vocoder"])
         total_wav_seconds.append(metrics["wav_seconds"])
 
-    print(f"Average RTF: {np.sum(total_t) / np.sum(total_wav_seconds):.4f}")
-    print(
+    logging.info(f"Average RTF: {np.sum(total_t) / np.sum(total_wav_seconds):.4f}")
+    logging.info(
         f"Average RTF w/o vocoder: "
         f"{np.sum(total_t_no_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
-    print(
+    logging.info(
         f"Average RTF vocoder: "
         f"{np.sum(total_t_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
@@ -482,7 +467,7 @@ def main():
     for param, value in model_specific_defaults.items():
         if getattr(params, param) is None:
             setattr(params, param, value)
-            print(f"Setting {param} to default value: {value}")
+            logging.info(f"Setting {param} to default value: {value}")
 
     assert (params.test_list is not None) ^ (
         (params.prompt_wav and params.prompt_text and params.text) is not None
@@ -491,30 +476,35 @@ def main():
         " or '--prompt-wav, --prompt-text and --text'."
     )
 
-    if torch.cuda.is_available():
-        params.device = torch.device("cuda", 0)
-    elif torch.backends.mps.is_available():
-        params.device = torch.device("mps")
+    if params.model_dir is not None:
+        params.model_dir = Path(params.model_dir)
+        if not params.model_dir.is_dir():
+            raise FileNotFoundError(f"{params.model_dir} does not exist")
+        for filename in [params.checkpoint_name, "model.json", "tokens.txt"]:
+            if not (params.model_dir / filename).is_file():
+                raise FileNotFoundError(f"{params.model_dir / filename} does not exist")
+        model_ckpt = params.model_dir / params.checkpoint_name
+        model_config = params.model_dir / "model.json"
+        token_file = params.model_dir / "tokens.txt"
+        logging.info(
+            f"Using local model dir {params.model_dir}, "
+            f"checkpoint {params.checkpoint_name}"
+        )
     else:
-        params.device = torch.device("cpu")
-
-    print("Loading model...")
-    if params.model_config is None:
+        logging.info("Using pretrained model from the huggingface")
+        logging.info("Downloading the requires files from HuggingFace")
+        model_ckpt = hf_hub_download(
+            HUGGINGFACE_REPO, filename=f"{MODEL_DIR[params.model_name]}/model.pt"
+        )
         model_config = hf_hub_download(
-            HUGGINGFACE_REPO, filename=MODEL_CONFIG[params.model_name]
+            HUGGINGFACE_REPO, filename=f"{MODEL_DIR[params.model_name]}/model.json"
         )
-    else:
-        model_config = params.model_config
 
-    with open(model_config, "r") as f:
-        model_config = json.load(f)
-
-    if params.token_file is None:
         token_file = hf_hub_download(
-            HUGGINGFACE_REPO, filename=TOKEN_FILE[params.model_name]
+            HUGGINGFACE_REPO, filename=f"{MODEL_DIR[params.model_name]}/tokens.txt"
         )
-    else:
-        token_file = params.token_file
+
+    logging.info("Loading model...")
 
     if params.tokenizer == "emilia":
         tokenizer = EmiliaTokenizer(token_file=token_file)
@@ -528,13 +518,8 @@ def main():
 
     tokenizer_config = {"vocab_size": tokenizer.vocab_size, "pad_id": tokenizer.pad_id}
 
-    if params.checkpoint is None:
-        model_ckpt = hf_hub_download(
-            HUGGINGFACE_REPO,
-            filename=PRETRAINED_MODEL[params.model_name],
-        )
-    else:
-        model_ckpt = params.checkpoint
+    with open(model_config, "r") as f:
+        model_config = json.load(f)
 
     if params.model_name == "zipvoice":
         model = ZipVoice(
@@ -548,12 +533,20 @@ def main():
             **tokenizer_config,
         )
 
-    if model_ckpt.endswith(".safetensors"):
+    if str(model_ckpt).endswith(".safetensors"):
         safetensors.torch.load_model(model, model_ckpt)
-    elif model_ckpt.endswith(".pt"):
+    elif str(model_ckpt).endswith(".pt"):
         load_checkpoint(filename=model_ckpt, model=model, strict=True)
     else:
         raise NotImplementedError(f"Unsupported model checkpoint format: {model_ckpt}")
+
+    if torch.cuda.is_available():
+        params.device = torch.device("cuda", 0)
+    elif torch.backends.mps.is_available():
+        params.device = torch.device("mps")
+    else:
+        params.device = torch.device("cpu")
+    logging.info(f"Device: {params.device}")
 
     model = model.to(params.device)
     model.eval()
@@ -570,7 +563,7 @@ def main():
         )
     params.sampling_rate = model_config["feature"]["sampling_rate"]
 
-    print("Start generating...")
+    logging.info("Start generating...")
     if params.test_list:
         os.makedirs(params.res_dir, exist_ok=True)
         generate_list(
@@ -608,10 +601,14 @@ def main():
             feat_scale=params.feat_scale,
             sampling_rate=params.sampling_rate,
         )
-    print("Done")
+    logging.info("Done")
 
 
 if __name__ == "__main__":
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
+
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
+
     main()

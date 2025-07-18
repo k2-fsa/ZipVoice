@@ -1,7 +1,7 @@
 --find-links https://k2-fsa.github.io/icefall/piper_phonemize.html
 
-torch<=2.6.0
-torchaudio<=2.6.0
+torch
+torchaudio
 numpy
 lhotse
 huggingface_hub
@@ -18,3 +18,4 @@ unidecode
 jieba
 piper_phonemize
 pypinyin
+setuptools<81

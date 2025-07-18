@@ -41,6 +41,7 @@ import lhotse
 import torch
 from lhotse import CutSet, LilcomChunkyWriter, load_manifest_lazy
 
+from zipvoice.utils.common import str2bool
 from zipvoice.utils.feature import VocosFbank
 
 # Torch's multithreaded behavior needs to be disabled or
@@ -50,24 +51,7 @@ from zipvoice.utils.feature import VocosFbank
 torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 
-
-def str2bool(v):
-    """Used in argparse.ArgumentParser.add_argument to indicate
-    that a type is a bool type and user can enter
-
-        - yes, true, t, y, 1, to represent True
-        - no, false, f, n, 0, to represent False
-
-    See https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse  # noqa
-    """
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
-    else:
-        raise argparse.ArgumentTypeError("Boolean value expected.")
+lhotse.set_audio_duration_mismatch_tolerance(0.1)
 
 
 def get_args():
@@ -150,6 +134,10 @@ def get_args():
 
 
 def compute_fbank_split_single(params, idx):
+    logging.info(
+        f"Computing features for {idx}-th split of "
+        f"{params.dataset} dataset {params.subset} subset"
+    )
     lhotse.set_audio_duration_mismatch_tolerance(0.1)  # for emilia
     src_dir = Path(params.source_dir)
     output_dir = Path(params.dest_dir)
@@ -197,6 +185,7 @@ def compute_fbank_split_single(params, idx):
         storage_type=LilcomChunkyWriter,
         overwrite=True,
     )
+    logging.info(f"Saving file to {output_dir / cuts_filename}")
     cut_set.to_file(output_dir / cuts_filename)
 
 
@@ -218,6 +207,9 @@ def compute_fbank_split(params):
 
 
 def compute_fbank(params):
+    logging.info(
+        f"Computing features for {params.dataset} dataset {params.subset} subset"
+    )
     src_dir = Path(params.source_dir)
     output_dir = Path(params.dest_dir)
     num_jobs = params.num_jobs
@@ -263,16 +255,18 @@ def compute_fbank(params):
         num_jobs=num_jobs,
         storage_type=LilcomChunkyWriter,
     )
+    logging.info(f"Saving file to {output_dir / cuts_filename}")
     cut_set.to_file(output_dir / cuts_filename)
 
 
 if __name__ == "__main__":
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
 
-    logging.basicConfig(format=formatter, level=logging.INFO)
     args = get_args()
     logging.info(vars(args))
     if args.split_cuts:
         compute_fbank_split(params=args)
     else:
         compute_fbank(params=args)
+    logging.info("Done!")

@@ -47,7 +47,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
       echo "Stage 1: Prepare manifests for custom dataset from tsv files"
 
       for subset in train dev;do
-            python3 local/prepare_custom_dataset.py \
+            python3 -m zipvoice.bin.prepare_dataset \
                   --tsv-path data/raw/custom_${subset}.tsv \
                   --prefix custom \
                   --subset ${subset} \
@@ -56,6 +56,12 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
       done
       # The output manifest files are "data/manifests/custom_cuts_train.jsonl.gz".
       # and "data/manifests/custom_cuts_dev.jsonl.gz".
+
+      # We did not add tokens to the manifests, as on-the-fly tokenization
+      # with the simple tokenizer used in this example is not slow.
+      # If you change to a complex tokenizer, e.g., with g2p and heavy text normalization,
+      # you may need to add tokens to the manifests to speed up the training.
+      # Refer to the fine-tuning example for adding tokens to the manifests.
 fi
 
 if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
@@ -114,8 +120,6 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --iter 60000 \
             --avg 2 \
             --model-name zipvoice \
-            --model-config conf/zipvoice_base.json \
-            --token-file data/tokens_custom.txt \
             --exp-dir exp/zipvoice_custom
       # The generated model is exp/zipvoice_custom/iter-60000-avg-2.pt
 fi
@@ -126,10 +130,9 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
       echo "Stage 6: Inference of the ZipVoice model"
       python3 -m zipvoice.bin.infer_zipvoice \
             --model-name zipvoice \
-            --checkpoint exp/zipvoice_custom/iter-60000-avg-2.pt \
-            --model-config conf/zipvoice_base.json \
+            --model-dir exp/zipvoice_custom \
+            --checkpoint-name iter-60000-avg-2.pt \
             --tokenizer simple \
-            --token-file "data/tokens_custom.txt" \
             --test-list test.tsv \
             --res-dir results/test_custom
 fi

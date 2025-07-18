@@ -51,7 +51,7 @@ import torch.nn as nn
 from lhotse.cut import Cut, CutSet
 from lhotse.utils import fix_random_seed
 from torch import Tensor
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.utils.tensorboard import SummaryWriter
@@ -77,6 +77,7 @@ from zipvoice.utils.common import (
     AttributeDict,
     MetricsTracker,
     cleanup_dist,
+    create_grad_scaler,
     get_adjusted_batch_count,
     get_env_info,
     get_parameter_groups_with_lrs,
@@ -85,6 +86,7 @@ from zipvoice.utils.common import (
     setup_dist,
     setup_logger,
     str2bool,
+    torch_autocast,
 )
 from zipvoice.utils.hooks import register_inf_check_hooks
 from zipvoice.utils.lr_scheduler import Eden, FixedLRScheduler, LRScheduler
@@ -587,7 +589,7 @@ def train_one_epoch(
         )
 
         try:
-            with autocast("cuda", enabled=params.use_fp16):
+            with torch_autocast(dtype=torch.float16, enabled=params.use_fp16):
                 loss, loss_info = compute_fbank_loss(
                     params=params,
                     model=model,
@@ -809,7 +811,7 @@ def scan_pessimistic_batches_for_oom(
             return_feature=True,
         )
         try:
-            with autocast("cuda", enabled=params.use_fp16):
+            with torch_autocast(dtype=torch.float16, enabled=params.use_fp16):
 
                 loss, loss_info = compute_fbank_loss(
                     params=params,
@@ -839,8 +841,10 @@ def scan_pessimistic_batches_for_oom(
 
 
 def tokenize_text(c: Cut, tokenizer):
-    text = c.supervisions[0].text
-    tokens = tokenizer.texts_to_token_ids([text])
+    if hasattr(c.supervisions[0], "tokens"):
+        tokens = tokenizer.tokens_to_token_ids([c.supervisions[0].tokens])
+    else:
+        tokens = tokenizer.texts_to_token_ids([c.supervisions[0].text])
     c.supervisions[0].tokens = tokens[0]
     return c
 
@@ -949,7 +953,7 @@ def run(rank, world_size, args):
     else:
         scheduler = Eden(optimizer, params.lr_batches, params.lr_epochs)
 
-    scaler = GradScaler("cuda", enabled=params.use_fp16)
+    scaler = create_grad_scaler(enabled=params.use_fp16)
 
     if params.start_epoch > 1 and checkpoints is not None:
         # load state_dict for optimizers
@@ -1009,6 +1013,14 @@ def run(rank, world_size, args):
         # To avoid OOM issues due to too long dev cuts
         dev_cuts = dev_cuts.filter(_remove_short_and_long_utt)
 
+    if params.tokenizer in ["emilia", "espeak", "dialog"]:
+        if not hasattr(train_cuts[0].supervisions[0], "tokens") or not hasattr(
+            dev_cuts[0].supervisions[0], "tokens"
+        ):
+            logging.warning(
+                f"Using {params.tokenizer} tokenizer but tokens are not prepared,"
+                f"will tokenize on-the-fly, which can slow down training significantly."
+            )
     _tokenize_text = partial(tokenize_text, tokenizer=tokenizer)
     train_cuts = train_cuts.map(_tokenize_text)
     dev_cuts = dev_cuts.map(_tokenize_text)

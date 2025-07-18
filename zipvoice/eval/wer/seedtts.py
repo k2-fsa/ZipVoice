@@ -37,8 +37,6 @@ from tqdm import tqdm
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from zhon.hanzi import punctuation
 
-from zipvoice.eval.utils import setup_console_logger
-
 
 def get_parser():
     parser = argparse.ArgumentParser(
@@ -278,7 +276,10 @@ if __name__ == "__main__":
 
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    setup_console_logger()
+
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
+
     parser = get_parser()
     args = parser.parse_args()
     if torch.cuda.is_available():

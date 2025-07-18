@@ -45,6 +45,9 @@ if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
   log "Stage 1: Prepare LibriTTS manifest"
   # We assume that you have downloaded the LibriTTS corpus
   # to $dl_dir/LibriTTS
+
+  # We did not add tokens to this manifest, as on-the-fly 
+  # tokenization with LibriTTSTokenizer is not slow.
   mkdir -p data/manifests
   if [ ! -e data/manifests/.libritts.done ]; then
     lhotse prepare libritts --num-jobs ${nj} $dl_dir/LibriTTS data/manifests
@@ -78,11 +81,6 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
       shuf | gzip -c > data/fbank/libritts_cuts_train-all-shuf.jsonl.gz
   fi
 
-  if [ ! -f data/fbank/libritts_cuts_train-clean-460.jsonl.gz ]; then
-    cat <(gunzip -c data/fbank/libritts_cuts_train-clean-100.jsonl.gz) \
-      <(gunzip -c data/fbank/libritts_cuts_train-clean-360.jsonl.gz) | \
-      shuf | gzip -c > data/fbank/libritts_cuts_train-clean-460.jsonl.gz
-  fi
 
   if [ ! -e data/fbank/.libritts-validated.done ]; then
     log "Validating data/fbank for LibriTTS"

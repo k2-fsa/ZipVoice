@@ -41,7 +41,7 @@ from transformers import (
 )
 from zhon.hanzi import punctuation
 
-from zipvoice.eval.utils import load_waveform, setup_console_logger
+from zipvoice.eval.utils import load_waveform
 
 
 def get_parser():
@@ -421,6 +421,7 @@ def main(test_list, wav_dir, extension, model_dir, decode_path, lang, cpwer, dev
                     word_num == cp_word_num
                 ), f"{wav_path} has {word_num} words, but {cp_word_num} cp words"
 
+    print("-" * 50)
     if cpwer:
         cp_wer = round(
             (np.sum(cp_subses) + np.sum(cp_deles) + np.sum(cp_inses))
@@ -446,7 +447,7 @@ def main(test_list, wav_dir, extension, model_dir, decode_path, lang, cpwer, dev
     inse = np.sum(inses)
     dele = np.sum(deles)
     subs = np.sum(subses)
-    print("-" * 50)
+
     logging.info(f"WER = {wer}%")
     logging.info(
         f"Errors: {inse} insertions, {dele} deletions, {subs} substitutions, "
@@ -467,7 +468,10 @@ if __name__ == "__main__":
 
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    setup_console_logger()
+
+    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    logging.basicConfig(format=formatter, level=logging.INFO, force=True)
+
     parser = get_parser()
     args = parser.parse_args()
     if torch.cuda.is_available():

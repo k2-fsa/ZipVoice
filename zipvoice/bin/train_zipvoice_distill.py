@@ -34,7 +34,7 @@ python3 -m zipvoice.bin.train_zipvoice_distill \
     --token-file data/tokens_emilia.txt \
     --dataset emilia \
     --manifest-dir data/fbank \
-    --teacher-model zipvoice/exp_zipvoice/epoch-11-avg-4.pt \
+    --teacher-model exp/zipvoice/epoch-11-avg-4.pt \
     --distill-stage first \
     --exp-dir exp/zipvoice_distill_1stage
 
@@ -51,9 +51,9 @@ python3 -m zipvoice.bin.train_zipvoice_distill \
     --token-file data/tokens_emilia.txt \
     --dataset emilia \
     --manifest-dir data/fbank \
-    --teacher-model zipvoice/exp_zipvoice_distill_1stage/iter-60000-avg-7.pt \
+    --teacher-model exp/zipvoice_distill_1stage/iter-60000-avg-7.pt \
     --distill-stage second \
-    --exp-dir zipvoice/exp_zipvoice_distill
+    --exp-dir exp/zipvoice_distill
 """
 
 import argparse
@@ -73,7 +73,7 @@ import torch.nn as nn
 from lhotse.cut import Cut, CutSet
 from lhotse.utils import fix_random_seed
 from torch import Tensor
-from torch.amp import GradScaler, autocast
+from torch.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.utils.tensorboard import SummaryWriter
@@ -106,6 +106,7 @@ from zipvoice.utils.common import (
     MetricsTracker,
     cleanup_dist,
     condition_time_mask,
+    create_grad_scaler,
     get_adjusted_batch_count,
     get_parameter_groups_with_lrs,
     make_pad_mask,
@@ -114,6 +115,7 @@ from zipvoice.utils.common import (
     setup_dist,
     setup_logger,
     str2bool,
+    torch_autocast,
 )
 from zipvoice.utils.hooks import register_inf_check_hooks
 from zipvoice.utils.lr_scheduler import FixedLRScheduler, LRScheduler
@@ -350,14 +352,6 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--lang",
-        type=str,
-        default="en-us",
-        help="Language identifier, used when tokenizer type is espeak. see"
-        "https://github.com/rhasspy/espeak-ng/blob/master/docs/languages.md",
-    )
-
-    parser.add_argument(
         "--token-file",
         type=str,
         default="data/tokens_emilia.txt",
@@ -498,7 +492,7 @@ def compute_fbank_loss(
             features_lens=features_lens,
             noise=xt,
             speech_condition_mask=speech_condition_mask,
-            t_start=t,
+            t_start=t_value,
             t_end=t_dest,
             num_step=1,
             guidance_scale=guidance_scale,
@@ -636,7 +630,7 @@ def train_one_epoch(
         )
 
         try:
-            with autocast("cuda", enabled=params.use_fp16):
+            with torch_autocast(dtype=torch.float16, enabled=params.use_fp16):
                 loss, loss_info = compute_fbank_loss(
                     params=params,
                     model=model,
@@ -827,7 +821,7 @@ def scan_pessimistic_batches_for_oom(
             return_feature=True,
         )
         try:
-            with autocast("cuda", enabled=params.use_fp16):
+            with torch_autocast(dtype=torch.float16, enabled=params.use_fp16):
 
                 loss, loss_info = compute_fbank_loss(
                     params=params,
@@ -997,7 +991,7 @@ def run(rank, world_size, args):
 
     scheduler = FixedLRScheduler(optimizer)
 
-    scaler = GradScaler("cuda", enabled=params.use_fp16)
+    scaler = create_grad_scaler(enabled=params.use_fp16)
 
     if params.start_epoch > 1 and checkpoints is not None:
         # load state_dict for optimizers
@@ -1057,6 +1051,14 @@ def run(rank, world_size, args):
         # To avoid OOM issues due to too long dev cuts
         dev_cuts = dev_cuts.filter(_remove_short_and_long_utt)
 
+    if params.tokenizer in ["emilia", "espeak", "dialog"]:
+        if not hasattr(train_cuts[0].supervisions[0], "tokens") or not hasattr(
+            dev_cuts[0].supervisions[0], "tokens"
+        ):
+            logging.warning(
+                f"Using {params.tokenizer} tokenizer but tokens are not prepared,"
+                f"will tokenize on-the-fly, which can slow down training significantly."
+            )
     _tokenize_text = partial(tokenize_text, tokenizer=tokenizer)
     train_cuts = train_cuts.map(_tokenize_text)
     dev_cuts = dev_cuts.map(_tokenize_text)
