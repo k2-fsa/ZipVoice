@@ -133,7 +133,7 @@ fi
 
 if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
       echo "Stage 9: Inference of the ZipVoice-Distill model"
-      python3 zipvoice.bin.infer_zipvoice \
+      python3 -m zipvoice.bin.infer_zipvoice \
             --model-name zipvoice_distill \
             --model-dir exp/zipvoice_distill_libritts \
             --checkpoint-name epoch-6-avg-3.pt \
