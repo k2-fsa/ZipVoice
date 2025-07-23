@@ -313,6 +313,7 @@ class SpeechEvalDataset(torch.utils.data.Dataset):
 
 
 def main(test_list, wav_dir, extension, model_dir, decode_path, lang, cpwer, device):
+    logging.info(f"Calculating WER for {wav_dir} (cpwer={cpwer})")
     if lang == "en":
         model = load_en_model(model_dir, device=device)
     elif lang == "zh":

@@ -187,6 +187,7 @@ def process_one(hypothesis: str, truth: str, lang: str) -> tuple:
 
 
 def main(test_list, wav_path, extension, model_path, decode_path, lang, device):
+    logging.info(f"Calculating WER for {wav_path}")
     if lang == "en":
         processor, model = load_en_model(model_path)
         model.to(device)

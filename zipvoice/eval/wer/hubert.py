@@ -181,6 +181,7 @@ class SpeechEvalDataset(torch.utils.data.Dataset):
 
 
 def main(test_list, wav_path, extension, model_dir, decode_path, batch_size, device):
+    logging.info(f"Calculating WER for {wav_path}")
     model_path = os.path.join(model_dir, "wer/hubert-large-ls960-ft/")
     if not os.path.exists(model_path):
         logging.error(
