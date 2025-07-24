@@ -127,7 +127,7 @@ def main():
             "vocab_size": tokenizer.vocab_size,
             "pad_id": tokenizer.pad_id,
             "spk_a_id": tokenizer.spk_a_id,
-            "spk_b_id": tokenizer.spk_a_id,
+            "spk_b_id": tokenizer.spk_b_id,
         }
 
     params.suffix = f"epoch-{params.epoch}-avg-{params.avg}"
