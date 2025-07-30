@@ -61,7 +61,8 @@ class MetricsTracker(collections.defaultdict):
         for k, v in self.items():
             ans[k] = v
         for k, v in other.items():
-            ans[k] = ans[k] + v
+            if v - v == 0:
+                ans[k] = ans[k] + v
         return ans
 
     def __mul__(self, alpha: float) -> "MetricsTracker":
@@ -580,6 +581,7 @@ def get_parameter_groups_with_lrs(
     lr: float,
     include_names: bool = False,
     freeze_modules: List[str] = [],
+    unfreeze_modules: List[str] = [],
 ) -> List[dict]:
     """
     This is for use with the ScaledAdam optimizers (more recent versions that accept
@@ -603,6 +605,9 @@ def get_parameter_groups_with_lrs(
          ...   ]
 
     """
+    # Use freeze_modules or unfreeze_modules to freeze or unfreeze modules
+    assert not (len(freeze_modules) and len(unfreeze_modules))
+
     # flat_lr_scale just contains the lr_scale explicitly specified
     # for each prefix of the name, e.g. 'encoder.layers.3', these need
     # to be multiplied for all prefix of the name of any given parameter.
@@ -619,18 +624,32 @@ def get_parameter_groups_with_lrs(
     lr_to_params = defaultdict(list)
 
     for name, parameter in model.named_parameters():
+        if not parameter.requires_grad:
+            logging.info(f"Remove {name} from parameter")
+            continue
         split_name = name.split(".")
         # caution: as a special case, if the name is '', split_name will be [ '' ].
         prefix = split_name[0]
-        if prefix == "module":  # DDP
-            module_name = split_name[1]
-            if module_name in freeze_modules:
-                logging.info(f"Remove {name} from parameters")
-                continue
-        else:
-            if prefix in freeze_modules:
-                logging.info(f"Remove {name} from parameters")
-                continue
+        if len(freeze_modules) > 0:
+            if prefix == "module":  # DDP
+                module_name = split_name[1]
+                if module_name in freeze_modules:
+                    logging.info(f"Remove {name} from parameters")
+                    continue
+            else:
+                if prefix in freeze_modules:
+                    logging.info(f"Remove {name} from parameters")
+                    continue
+        elif len(unfreeze_modules) > 0:
+            if prefix == "module":  # DDP
+                module_name = split_name[1]
+                if module_name not in unfreeze_modules:
+                    logging.info(f"Remove {name} from parameters")
+                    continue
+            else:
+                if prefix not in unfreeze_modules:
+                    logging.info(f"Remove {name} from parameters")
+                    continue
         cur_lr = lr * flat_lr_scale[prefix]
         if prefix != "":
             cur_lr *= flat_lr_scale[""]

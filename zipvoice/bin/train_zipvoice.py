@@ -251,6 +251,15 @@ def get_parser():
     )
 
     parser.add_argument(
+        "--valid-by-epoch",
+        type=str2bool,
+        default=False,
+        help="""Whether to validate after each epoch. If False, will validate 
+        after every save_every_n iterations.
+        """,
+    )
+
+    parser.add_argument(
         "--keep-last-k",
         type=int,
         default=30,
@@ -496,7 +505,7 @@ def train_one_epoch(
 
     The training loss from the mean of all frames is saved in
     `params.train_loss`. It runs the validation process every
-    `params.valid_interval` batches.
+    `params.valid_interval` batches or every epochs.
 
     Args:
       params:
@@ -551,7 +560,9 @@ def train_one_epoch(
                 set_batch_count(model, get_adjusted_batch_count(params))
 
         if (
-            params.batch_idx_train > 0
+            params.valid_by_epoch and batch_idx == 0 and not params.print_diagnostics
+        ) or (
+            not params.valid_by_epoch
             and params.batch_idx_train % params.valid_interval == 0
             and not params.print_diagnostics
         ):

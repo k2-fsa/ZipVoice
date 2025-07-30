@@ -1077,7 +1077,13 @@ class SwooshL(torch.nn.Module):
         if torch.jit.is_scripting() or torch.jit.is_tracing():
             zero = torch.tensor(0.0, dtype=x.dtype, device=x.device)
             return logaddexp(zero, x - 4.0) - 0.08 * x - 0.035
-        return SwooshLFunction.apply(x)
+        elif "k2" not in sys.modules:
+            return SwooshLFunction.apply(x)
+        else:
+            if not x.requires_grad:
+                return k2.swoosh_l_forward(x)
+            else:
+                return k2.swoosh_l(x)
 
 
 class SwooshLOnnx(torch.nn.Module):
@@ -1147,7 +1153,13 @@ class SwooshR(torch.nn.Module):
         if torch.jit.is_scripting() or torch.jit.is_tracing():
             zero = torch.tensor(0.0, dtype=x.dtype, device=x.device)
             return logaddexp(zero, x - 1.0) - 0.08 * x - 0.313261687
-        return SwooshRFunction.apply(x)
+        elif "k2" not in sys.modules:
+            return SwooshRFunction.apply(x)
+        else:
+            if not x.requires_grad:
+                return k2.swoosh_r_forward(x)
+            else:
+                return k2.swoosh_r(x)
 
 
 class SwooshROnnx(torch.nn.Module):
