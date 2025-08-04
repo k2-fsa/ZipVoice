@@ -273,6 +273,8 @@ def generate_sentence(
                 orig_freq=prompt_sampling_rate, new_freq=sampling_rate
             )
             loaded_prompt_wavs[i] = resampler(loaded_prompt_wavs[i])
+        if loaded_prompt_wavs[i].size(0) != 1:
+            loaded_prompt_wavs[i] = loaded_prompt_wavs[i].mean(0, keepdim=True)
 
     if len(loaded_prompt_wavs) == 1:
         prompt_wav = loaded_prompt_wavs[0]
