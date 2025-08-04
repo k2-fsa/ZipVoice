@@ -84,7 +84,8 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
             python3 -m zipvoice.bin.prepare_tokens \
                   --input-file data/manifests/custom-finetune_cuts_raw_${subset}.jsonl.gz \
                   --output-file data/manifests/custom-finetune_cuts_${subset}.jsonl.gz \
-                  --tokenizer ${tokenizer}
+                  --tokenizer ${tokenizer} \
+                  --lang ${lang}
       done
       # The output manifest files are "data/manifests/custom-finetune_cuts_train.jsonl.gz".
       # and "data/manifests/custom-finetune_cuts_dev.jsonl.gz".

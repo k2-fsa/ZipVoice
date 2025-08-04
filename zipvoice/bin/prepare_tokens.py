@@ -42,10 +42,24 @@ def get_args():
         help="The destination directory of manifest files.",
     )
 
+    parser.add_argument(
+        "--lang",
+        type=str,
+        default="en-us",
+        help="Language identifier, used when tokenizer type is espeak. see"
+        "https://github.com/rhasspy/espeak-ng/blob/master/docs/languages.md",
+    )
+
     return parser.parse_args()
 
 
-def prepare_tokens(input_file: Path, output_file: Path, num_jobs: int, tokenizer: str):
+def prepare_tokens(
+    input_file: Path,
+    output_file: Path,
+    num_jobs: int,
+    tokenizer: str,
+    lang: str = "en-us",
+):
     logging.info(f"Processing {input_file}")
     if output_file.is_file():
         logging.info(f"{output_file} exists, skipping.")
@@ -53,7 +67,7 @@ def prepare_tokens(input_file: Path, output_file: Path, num_jobs: int, tokenizer
     logging.info(f"loading manifest from {input_file}")
     cut_set = load_manifest(input_file)
 
-    _add_tokens = partial(add_tokens, tokenizer=tokenizer)
+    _add_tokens = partial(add_tokens, tokenizer=tokenizer, lang=lang)
 
     logging.info("Adding tokens")
 
@@ -74,6 +88,7 @@ if __name__ == "__main__":
     output_file = Path(args.output_file)
     num_jobs = args.num_jobs
     tokenizer = args.tokenizer
+    lang = args.lang
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -82,6 +97,7 @@ if __name__ == "__main__":
         output_file=output_file,
         num_jobs=num_jobs,
         tokenizer=tokenizer,
+        lang=lang,
     )
 
     logging.info("Done!")

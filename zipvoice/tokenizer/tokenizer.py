@@ -137,6 +137,7 @@ class EspeakTokenizer(Tokenizer):
         """
         # Parse token file
         self.has_tokens = False
+        self.lang = lang
         if token_file is None:
             logging.debug(
                 "Initialize Tokenizer without tokens file, \
@@ -153,7 +154,6 @@ class EspeakTokenizer(Tokenizer):
         self.pad_id = self.token2id["_"]  # padding
         self.vocab_size = len(self.token2id)
         self.has_tokens = True
-        self.lang = lang
 
     def g2p(self, text: str) -> List[str]:
         try:
@@ -611,11 +611,11 @@ class LibriTTSTokenizer(Tokenizer):
         return token_ids_list
 
 
-def add_tokens(cut_set: CutSet, tokenizer: str):
+def add_tokens(cut_set: CutSet, tokenizer: str, lang: str):
     if tokenizer == "emilia":
         tokenizer = EmiliaTokenizer()
     elif tokenizer == "espeak":
-        tokenizer = EspeakTokenizer()
+        tokenizer = EspeakTokenizer(lang=lang)
     elif tokenizer == "dialog":
         tokenizer = DialogTokenizer()
     elif tokenizer == "libritts":
