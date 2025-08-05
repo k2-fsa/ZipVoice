@@ -198,7 +198,7 @@ Each line of `test.tsv` is in one of the following formats:
 - `wav_name` is the name of the output wav file.
 - `prompt_transcription` is the transcription of the conversational prompt wav, e.g, "[S1] Hello. [S2] How are you?"
 - `prompt_wav` is the path to the prompt wav.
-- `text` is the text to be synthesized, e.g. "[S1] I'm fine. [S2] What's your name?"
+- `text` is the text to be synthesized, e.g. "[S1] I'm fine. [S2] What's your name? [S1] I'm Eric. [S2] Hi Eric."
 
 (2) **Splitted prompt format** where the audios and transciptions of two speakers exist in separate files:
 
@@ -211,7 +211,7 @@ Each line of `test.tsv` is in one of the following formats:
 - `spk2_prompt_transcription` is the transcription of the second speaker's prompt wav, e.g, "How are you?"
 - `spk1_prompt_wav` is the path to the first speaker's prompt wav file.
 - `spk2_prompt_wav` is the path to the second speaker's prompt wav file.
-- `text` is the text to be synthesized, e.g. "[S1] I'm fine. [S2] What's your name?"
+- `text` is the text to be synthesized, e.g. "[S1] I'm fine. [S2] What's your name? [S1] I'm Eric. [S2] Hi Eric."
 
 ### 3. Other features
 
