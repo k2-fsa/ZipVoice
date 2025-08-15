@@ -140,6 +140,18 @@ class OnnxTextModel(nn.Module):
             dtype=torch.int64
         )
 
+        # If you pass a scalar tensor, ONNX may infer the shape as [1] (rank-1 tensor),
+        # but sometimes expects an actual scalar (rank-0).
+        # When exporting, ONNX may generate a model where Concat expects inputs of the
+        # same rank, but receives [1] and [].
+        # In PyTorch, this is usually fine. In ONNX Runtime (C++), this causes the error like
+        # "Ranks of input data are different, cannot concatenate them. expected rank: 1 got: 2"
+        # If you use x.item(), ONNX loses the dynamic link and the input mismatch error can happen at inference.
+        # use reshape(()) to convert a rank-1 tensor to a rank-0 tensor.
+
+        token_dur = token_dur.reshape(())
+        features_len = features_len.reshape(())
+
         text_condition = embed[:, :-1, :].unsqueeze(2).expand(-1, -1, token_dur, -1)
         text_condition = text_condition.reshape(embed.shape[0], -1, embed.shape[2])
 
@@ -207,7 +219,7 @@ class OnnxFlowMatchingModel(nn.Module):
 def export_text_encoder(
     model: OnnxTextModel,
     filename: str,
-    opset_version: int = 11,
+    opset_version: int = 13,
 ) -> None:
     """Export the text encoder model to ONNX format.
 
@@ -245,6 +257,8 @@ def export_text_encoder(
         "version": "1",
         "model_author": "k2-fsa",
         "comment": "ZipVoice text encoder",
+        "use_espeak": "True",
+        "use_pinyin": "True",
     }
     logging.info(f"meta_data: {meta_data}")
     add_meta_data(filename=filename, meta_data=meta_data)
@@ -255,7 +269,7 @@ def export_text_encoder(
 def export_fm_decoder(
     model: OnnxFlowMatchingModel,
     filename: str,
-    opset_version: int = 11,
+    opset_version: int = 13,
 ) -> None:
     """Export the flow matching decoder model to ONNX format.
 
@@ -300,6 +314,11 @@ def export_fm_decoder(
         "model_author": "k2-fsa",
         "comment": "ZipVoice flow-matching decoder",
         "feat_dim": str(feat_dim),
+        "sample_rate": "24000",
+        "n_fft": "1024",
+        "hop_length": "256",
+        "window_length": "1024",
+        "num_mels": "100",
     }
     logging.info(f"meta_data: {meta_data}")
     add_meta_data(filename=filename, meta_data=meta_data)
@@ -363,7 +382,7 @@ def main():
     logging.info("Exporting model")
     onnx_model_dir = Path(params.onnx_model_dir)
     onnx_model_dir.mkdir(parents=True, exist_ok=True)
-    opset_version = 11
+    opset_version = 13
 
     text_encoder = OnnxTextModel(model=model)
     text_encoder_file = onnx_model_dir / "text_encoder.onnx"

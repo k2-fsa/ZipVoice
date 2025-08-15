@@ -73,7 +73,6 @@ import torch.nn as nn
 from lhotse.cut import Cut, CutSet
 from lhotse.utils import fix_random_seed
 from torch import Tensor
-from torch.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.utils.tensorboard import SummaryWriter
@@ -104,6 +103,7 @@ from zipvoice.utils.checkpoint import (
 from zipvoice.utils.common import (
     AttributeDict,
     MetricsTracker,
+    GradScaler,
     cleanup_dist,
     condition_time_mask,
     create_grad_scaler,

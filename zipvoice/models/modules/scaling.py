@@ -33,8 +33,27 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-custom_bwd = lambda func: torch.amp.custom_bwd(func, device_type="cuda")
-custom_fwd = lambda func: torch.amp.custom_fwd(func, device_type="cuda")
+
+def custom_amp_decorator(dec, cuda_amp_deprecated):
+    def decorator(func):
+        return (
+            dec(func)
+            if not cuda_amp_deprecated
+            else partial(dec, func, device_type="cuda")
+        )
+
+    return decorator
+
+
+if hasattr(torch.amp, "custom_fwd"):
+    deprecated = True
+    from torch.amp import custom_fwd, custom_bwd
+else:
+    deprecated = False
+    from torch.cuda.amp import custom_fwd, custom_bwd
+
+custom_fwd = custom_amp_decorator(custom_fwd, deprecated)
+custom_bwd = custom_amp_decorator(custom_bwd, deprecated)
 
 
 def logaddexp_onnx(x: Tensor, y: Tensor) -> Tensor:

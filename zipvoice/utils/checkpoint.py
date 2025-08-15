@@ -25,11 +25,10 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 import torch.nn as nn
 from lhotse.dataset.sampling.base import CutSampler
-from torch.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 
-from zipvoice.utils.common import AttributeDict
+from zipvoice.utils.common import AttributeDict, GradScaler
 
 # use duck typing for LRScheduler since we have different possibilities, see
 # our class LRScheduler.

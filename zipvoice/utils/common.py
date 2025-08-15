@@ -20,6 +20,12 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 
+
+if hasattr(torch.amp, "GradScaler"):
+    from torch.amp import GradScaler
+else:
+    from torch.cuda.amp import GradScaler
+
 Pathlike = Union[str, Path]
 
 
