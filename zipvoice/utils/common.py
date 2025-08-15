@@ -198,7 +198,8 @@ def setup_dist(
 
     if use_ddp_launch is False:
         dist.init_process_group("nccl", rank=rank, world_size=world_size)
-        torch.cuda.set_device(rank)
+        local_device_id = rank % torch.cuda.device_count()
+        torch.cuda.set_device(local_device_id)
     else:
         dist.init_process_group("nccl")
 
