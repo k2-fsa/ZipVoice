@@ -257,8 +257,8 @@ def export_text_encoder(
         "version": "1",
         "model_author": "k2-fsa",
         "comment": "ZipVoice text encoder",
-        "use_espeak": "True",
-        "use_pinyin": "True",
+        "use_espeak": "1",
+        "use_pinyin": "1",
     }
     logging.info(f"meta_data: {meta_data}")
     add_meta_data(filename=filename, meta_data=meta_data)
