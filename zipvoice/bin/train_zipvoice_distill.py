@@ -102,8 +102,8 @@ from zipvoice.utils.checkpoint import (
 )
 from zipvoice.utils.common import (
     AttributeDict,
-    MetricsTracker,
     GradScaler,
+    MetricsTracker,
     cleanup_dist,
     condition_time_mask,
     create_grad_scaler,
@@ -410,9 +410,6 @@ def compute_fbank_loss(
 
     batch_size, num_frames, _ = features.shape
 
-    features = torch.nn.functional.pad(
-        features, (0, 0, 0, num_frames - features.size(1))
-    )  # (B, T, F)
     noise = torch.randn_like(features)  # (B, T, F)
 
     # Sampling t and guidance_scale from uniform distribution

@@ -71,8 +71,8 @@ from zipvoice.utils.checkpoint import (
 )
 from zipvoice.utils.common import (
     AttributeDict,
-    MetricsTracker,
     GradScaler,
+    MetricsTracker,
     cleanup_dist,
     create_grad_scaler,
     get_adjusted_batch_count,
@@ -346,9 +346,6 @@ def compute_fbank_loss(
 
     batch_size, num_frames, _ = features.shape
 
-    features = torch.nn.functional.pad(
-        features, (0, 0, 0, num_frames - features.size(1))
-    )  # (B, T, F)
     assert (
         features.size(2) == 3 * params.feat_dim
     ), "we assume three channel features, the last channel is the mixed-channel feature"

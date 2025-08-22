@@ -273,7 +273,7 @@ class EmiliaTokenizer(Tokenizer):
                     )
                     continue
                 all_phoneme += phoneme
-        phoneme_list.append(all_phoneme)
+            phoneme_list.append(all_phoneme)
         return phoneme_list
 
     def tokens_to_token_ids(
