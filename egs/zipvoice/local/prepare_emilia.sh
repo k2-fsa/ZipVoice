@@ -93,11 +93,11 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   if [ ! -e data/manifests/tokenized_splits/.emilia.preprocess.done ]; then
     for subset in EN ZH; do 
       log "Tokenizing Emilia ${subset}"
-      python local/prepare_emilia.py \
+      python local/prepare_tokens_emilia.py \
         --subset ${subset} \
         --jobs ${nj} \
         --source-dir data/manifests/splits/ \
-        --output-dir data/manifests/tokenized_splits/
+        --dest-dir data/manifests/tokenized_splits/
     done
     touch data/manifests/tokenized_splits/.emilia.preprocess.done
   fi
