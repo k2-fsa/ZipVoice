@@ -196,6 +196,13 @@ def get_parser():
     )
 
     parser.add_argument(
+        "--num-thread",
+        type=int,
+        default=1,
+        help="Number of threads to use for PyTorch on CPU.",
+    )
+
+    parser.add_argument(
         "--raw-evaluation",
         type=str2bool,
         default=False,
@@ -462,7 +469,8 @@ def generate_sentence(
     else:
         prompt_wav = torch.cat(loaded_prompt_wavs, dim=1)
 
-    # Remove long silences in the prompt wav
+    # Remove edge and long silences in the prompt wav.
+    # Add 0.2s trailing silence to avoid leaking prompt to generated speech.
     prompt_wav = remove_silence(
         prompt_wav, sampling_rate, only_edge=False, trail_sil=200
     )
@@ -474,7 +482,8 @@ def generate_sentence(
     if prompt_duration > 40:
         logging.warning(
             f"Given prompt wav is too long ({prompt_duration}s). "
-            f"Please provide a shorter one."
+            f"Please provide a shorter one (prompt shorter than 10 "
+            f"seconds is recommended)."
         )
     elif prompt_duration > 20:
         logging.warning(
@@ -871,7 +880,8 @@ def generate_sentence_stereo(
             prompt_wav[0, : loaded_prompt_wavs[0].size(1)] = loaded_prompt_wavs[0]
             prompt_wav[1, loaded_prompt_wavs[0].size(1) :] = loaded_prompt_wavs[1]
 
-    # Remove long silences in the prompt wav
+    # Remove edge and long silences in the prompt wav.
+    # Add 0.2s trailing silence to avoid leaking prompt to generated speech.
     prompt_wav = remove_silence(
         prompt_wav, sampling_rate, only_edge=False, trail_sil=200
     )
@@ -883,7 +893,8 @@ def generate_sentence_stereo(
     if prompt_duration > 40:
         logging.warning(
             f"Given prompt wav is too long ({prompt_duration}s). "
-            f"Please provide a shorter one."
+            f"Please provide a shorter one (prompt shorter than 10 "
+            f"seconds is recommended)."
         )
     elif prompt_duration > 20:
         logging.warning(
@@ -1144,6 +1155,9 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+    torch.set_num_threads(args.num_thread)
+    torch.set_num_interop_threads(args.num_thread)
+
     params = AttributeDict()
     params.update(vars(args))
     fix_random_seed(params.seed)
@@ -1265,8 +1279,6 @@ def main():
 
 
 if __name__ == "__main__":
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
 
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
     logging.basicConfig(format=formatter, level=logging.INFO, force=True)

@@ -246,6 +246,13 @@ def get_parser():
     )
 
     parser.add_argument(
+        "--num-thread",
+        type=int,
+        default=1,
+        help="Number of threads to use for PyTorch on CPU.",
+    )
+
+    parser.add_argument(
         "--raw-evaluation",
         type=str2bool,
         default=False,
@@ -470,7 +477,8 @@ def generate_sentence(
     # Load and process prompt wav
     prompt_wav = load_prompt_wav(prompt_wav, sampling_rate=sampling_rate)
 
-    # Remove long silences in the prompt wav
+    # Remove edge and long silences in the prompt wav.
+    # Add 0.2s trailing silence to avoid leaking prompt to generated speech.
     prompt_wav = remove_silence(
         prompt_wav, sampling_rate, only_edge=False, trail_sil=200
     )
@@ -695,6 +703,9 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+    torch.set_num_threads(args.num_thread)
+    torch.set_num_interop_threads(args.num_thread)
+
     params = AttributeDict()
     params.update(vars(args))
     fix_random_seed(params.seed)
@@ -832,6 +843,9 @@ def main():
             remove_long_sil=params.remove_long_sil,
         )
     else:
+        assert (
+            not params.raw_evaluation
+        ), "Raw evaluation is only valid with --test-list"
         generate_sentence(
             save_path=params.res_wav_path,
             prompt_text=params.prompt_text,
@@ -857,9 +871,6 @@ def main():
 
 
 if __name__ == "__main__":
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
-
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
     logging.basicConfig(format=formatter, level=logging.INFO, force=True)
 

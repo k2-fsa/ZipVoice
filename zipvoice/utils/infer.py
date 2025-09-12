@@ -230,6 +230,7 @@ def cross_fade_concat(
 
 
 def add_punctuation(text: str):
+    """Add punctuation if there is not in the end of text"""
     text = text.strip()
     if text[-1] not in punctuation:
         text += "."
@@ -237,6 +238,17 @@ def add_punctuation(text: str):
 
 
 def load_prompt_wav(prompt_wav: str, sampling_rate: int):
+    """
+    Load the waveform with torchaudio and resampling if needed.
+
+    Parameters:
+        prompt_wav: path of the prompt wav.
+        sampling_rate: target sampling rate.
+
+    Returns:
+        Loaded prompt waveform with target sampling rate,
+        PyTorch tensor of shape (C, T)
+    """
     prompt_wav, prompt_sampling_rate = torchaudio.load(prompt_wav)
 
     if prompt_sampling_rate != sampling_rate:
@@ -247,7 +259,19 @@ def load_prompt_wav(prompt_wav: str, sampling_rate: int):
     return prompt_wav
 
 
-def rms_norm(prompt_wav: str, target_rms: float):
+def rms_norm(prompt_wav: torch.Tensor, target_rms: float):
+    """
+    Normalize the rms of prompt_wav is it is smaller than target rms.
+
+    Parameters:
+        prompt_wav: PyTorch tensor with shape (C, T).
+        target_rms: target rms value
+
+    Returns:
+        prompt_wav: normalized prompt wav with shape (C, T).
+        promt_rms: rms of original prompt wav. Will be used to
+            re-normalize the generated wav.
+    """
     prompt_rms = torch.sqrt(torch.mean(torch.square(prompt_wav)))
     if prompt_rms < target_rms:
         prompt_wav = prompt_wav * target_rms / prompt_rms
@@ -255,17 +279,19 @@ def rms_norm(prompt_wav: str, target_rms: float):
 
 
 def remove_silence(
-    audio: str, sampling_rate: int, only_edge: bool = False, trail_sil: float = 100
+    audio: torch.Tensor,
+    sampling_rate: int,
+    only_edge: bool = False,
+    trail_sil: float = 0,
 ):
     """
-    Process audio file, split using silences longer than 1 second,
-    remove edge silences
+    Remove silences longer than 1 second, and edge silences longer than 0.1 seconds
 
     Parameters:
         audio: PyTorch tensor with shape (C, T).
         sampling_rate: sampling rate of the audio.
         only_edge: If true, only remove edge silences.
-        trail_sil: the duration of trailing silence in ms.
+        trail_sil: the duration of added trailing silence in ms.
 
     Returns:
         PyTorch tensor with shape (C, T), where C is number of channels
@@ -289,25 +315,40 @@ def remove_silence(
         for seg in non_silent_segs:
             wave += seg
 
-    # Remove silence from beginning and end
-    wave = remove_silence_edges(wave, -50)
+    # Remove silence longer than 0.1 seconds in the begining and ending of wave
+    wave = remove_silence_edges(wave, 100, -50)
 
-    # Add 50ms of silence as buffer
+    # Add trailing silence to avoid leaking prompt to generated speech.
     wave = wave + AudioSegment.silent(duration=trail_sil)
 
     # Convert to PyTorch tensor
     return audiosegment_to_tensor(wave)
 
 
-def remove_silence_edges(audio, silence_threshold=-50):
-    """Remove silent parts from the beginning and end of audio"""
+def remove_silence_edges(
+    audio: AudioSegment, keep_silence: int = 100, silence_threshold: float = -50
+):
+    """
+    Remove edge silences longer than `keep_silence` ms.
+
+    Parameters:
+        audio: an AudioSegment object.
+        keep_silence: kept silence in the edge.
+        only_edge: If true, only remove edge silences.
+        silence_threshold: the threshold of silence.
+
+    Returns:
+        An AudioSegment object
+    """
     # Remove leading silence
     start_idx = detect_leading_silence(audio, silence_threshold=silence_threshold)
+    start_idx = max(0, start_idx - keep_silence)
     audio = audio[start_idx:]
 
     # Remove trailing silence
     audio = audio.reverse()
     start_idx = detect_leading_silence(audio, silence_threshold=silence_threshold)
+    start_idx = max(0, start_idx - keep_silence)
     audio = audio[start_idx:]
     audio = audio.reverse()
 

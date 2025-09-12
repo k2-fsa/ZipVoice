@@ -150,7 +150,6 @@ python3 -m zipvoice.bin.infer_zipvoice \
     --res-wav-path result.wav
 ```
 - `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
-- By default, we use the `zipvoice` model for better quality. If faster speed is a priority, you can switch to the `zipvoice_distill` and can reduce the `--num-steps` to as low as `4`.
 - If `<>` or `[]` appear in the text, strings enclosed by them will be treated as special tokens. `<>` denotes Chinese pinyin and `[]` denotes other special tags.
 
 #### 1.2 Inference of a list of sentences
@@ -213,10 +212,15 @@ Each line of `test.tsv` is in one of the following formats:
 
 We recommand a short prompt wav file (e.g., less than 3 seconds for single-speaker speech generation, less than 10 seconds for dialogue speech generation) for faster inference speed. A very long prompt will slow down the inference and degenerate the speech quality.
 
+#### 3.2 Speed optimization
 
-#### 3.2 Short text
+If the inference speed is unsatisfactory, you can speed it up as follows:
 
-When generating speech for very short texts (e.g., one or two words), the generated speech may sometimes omit certain pronunciations. To resolve this issue, you can pass `--speed 0.3` (where 0.3 is a tunable value) to extend the duration of the generated speech.
+- **Distill model and less steps**: For the single-speaker speech generation model, we use the `zipvoice` model by default for better speech quality. If faster speed is a priority, you can switch to the `zipvoice_distill` and can reduce the `--num-steps` to as low as `4` (8 by default).
+
+- **CPU speedup with multi-threading**: When running on CPU, you can pass the `--num-thread` parameter (e.g., `--num-thread 4`) to increase the number of threads for faster speed. We use 1 thread by default.
+
+- **CPU speedup with ONNX**: When running on CPU, you can use ONNX models with `zipvoice.bin.infer_zipvoice_onnx` for faster speed (haven't supported ONNX for dialogue generation models yet). For even faster speed, you can further set `--onnx-int8 True` to use an INT8-quantized ONNX model. Note that the quantized model will result in a certain degree of speech quality degradation. **Don't use ONNX on GPU**, as it is slower than PyTorch on GPU.
 
 #### 3.3 Memory control
 
@@ -226,9 +230,9 @@ The given text will be splitted into chunks based on punctuation (for single-spe
 
 By default, we preprocess inputs (prompt wav, prompt transcription, and text) for efficient inference and better performance. If you want to evaluate the model’s "raw" performance using exact provided inputs (e.g., to reproduce the results in our paper), you can pass `--raw-evaluation True`.
 
-#### 3.5 Model downloading
+#### 3.5 Short text
 
-If you have trouble connecting to HuggingFace when downloading the pre-trained models, try `export HF_ENDPOINT=https://hf-mirror.com`.
+When generating speech for very short texts (e.g., one or two words), the generated speech may sometimes omit certain pronunciations. To resolve this issue, you can pass `--speed 0.3` (where 0.3 is a tunable value) to extend the duration of the generated speech.
 
 #### 3.6 Correcting mispronounced chinese polyphone characters
 
@@ -246,6 +250,10 @@ To manually correct these mispronunciations, enclose the **corrected pinyin** in
 #### 3.7 Remove long silences from the generated speech
 
 Model will automatically determine the positions and lengths of silences in the generated speech. It occasionally has long silence in the middle of the speech. If you don't want this, you can pass `--remove-long-sil` to remove long silences in the middle of the generated speech (edge silences will be removed by default).
+
+#### 3.8 Model downloading
+
+If you have trouble connecting to HuggingFace when downloading the pre-trained models, try switching endpoint to the mirror site: `export HF_ENDPOINT=https://hf-mirror.com`.
 
 ## Train Your Own Model
 
