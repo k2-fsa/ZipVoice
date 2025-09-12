@@ -129,7 +129,8 @@ if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
             --res-dir results/test_libritts \
             --num-step 8 \
             --guidance-scale 1 \
-            --t-shift 0.7
+            --t-shift 0.7 \
+            --raw-evaluation True
 fi
 
 
@@ -144,5 +145,6 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
             --res-dir results/test_distill_libritts \
             --num-step 4 \
             --guidance-scale 3 \
-            --t-shift 0.7
+            --t-shift 0.7 \
+            --raw-evaluation True
 fi

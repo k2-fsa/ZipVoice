@@ -117,8 +117,7 @@ def load_checkpoint(
     if model is not None:
 
         if next(iter(checkpoint["model"])).startswith("module."):
-            logging.info("Loading checkpoint saved by DDP")
-
+            logging.debug("Loading checkpoint saved by DDP")
             dst_state_dict = model.state_dict()
             src_state_dict = checkpoint["model"]
             for key in dst_state_dict.keys():
@@ -127,7 +126,7 @@ def load_checkpoint(
             assert len(src_state_dict) == 0
             model.load_state_dict(dst_state_dict, strict=strict)
         else:
-            logging.info("Loading checkpoint")
+            logging.debug("Loading checkpoint")
             model.load_state_dict(checkpoint["model"], strict=strict)
 
         checkpoint.pop("model")

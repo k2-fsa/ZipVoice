@@ -60,8 +60,17 @@ from vocos import Vocos
 from zipvoice.models.zipvoice_dialog import ZipVoiceDialog, ZipVoiceDialogStereo
 from zipvoice.tokenizer.tokenizer import DialogTokenizer
 from zipvoice.utils.checkpoint import load_checkpoint
-from zipvoice.utils.common import AttributeDict
+from zipvoice.utils.common import AttributeDict, str2bool
 from zipvoice.utils.feature import VocosFbank
+from zipvoice.utils.infer import (
+    add_punctuation,
+    batchify_tokens,
+    chunk_tokens_dialog,
+    cross_fade_concat,
+    load_prompt_wav,
+    remove_silence,
+    rms_norm,
+)
 
 HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
 MODEL_DIR = {
@@ -186,6 +195,31 @@ def get_parser():
         "with single-channel prompts",
     )
 
+    parser.add_argument(
+        "--raw-evaluation",
+        type=str2bool,
+        default=False,
+        help="Whether to use the 'raw' evaluation mode where provided "
+        "prompts and text are fed to the model without pre-processing",
+    )
+
+    parser.add_argument(
+        "--max-duration",
+        type=float,
+        default=100,
+        help="Maximum duration (seconds) in a single batch, including "
+        "durations of the prompt and generated wavs. You can reduce it "
+        "if it causes CUDA OOM.",
+    )
+
+    parser.add_argument(
+        "--remove-long-sil",
+        type=str2bool,
+        default=False,
+        help="Whether to remove long silences in the middle of the generated "
+        "speech (edge silences will be removed by default).",
+    )
+
     return parser
 
 
@@ -203,7 +237,7 @@ def get_vocoder(vocos_local_path: Optional[str] = None):
     return vocoder
 
 
-def generate_sentence(
+def generate_sentence_raw_evaluation(
     save_path: str,
     prompt_text: str,
     prompt_wav: Union[str, List[str]],
@@ -222,8 +256,11 @@ def generate_sentence(
     sampling_rate: int = 24000,
 ):
     """
-    Generate waveform of a text based on a given prompt
-        waveform and its transcription.
+    Generate waveform of a text based on a given prompt waveform and its transcription,
+        this function directly feed the prompt_text, prompt_wav and text to the model.
+        It is not efficient and can have poor results for some inappropriate inputs.
+        (e.g., prompt wav contains long silence, text to be generated is too long)
+        This function can be used to evaluate the "raw" performance of the model.
 
     Args:
         save_path (str): Path to save the generated wav.
@@ -253,9 +290,6 @@ def generate_sentence(
         metrics (dict): Dictionary containing time and real-time
             factor metrics for processing.
     """
-    # Convert text to tokens
-    tokens = tokenizer.texts_to_token_ids([text])
-    prompt_tokens = tokenizer.texts_to_token_ids([prompt_text])
 
     # Load and preprocess prompt wav
     if isinstance(prompt_wav, str):
@@ -267,12 +301,9 @@ def generate_sentence(
 
     loaded_prompt_wavs = prompt_wav
     for i in range(len(prompt_wav)):
-        loaded_prompt_wavs[i], prompt_sampling_rate = torchaudio.load(prompt_wav[i])
-        if prompt_sampling_rate != sampling_rate:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=prompt_sampling_rate, new_freq=sampling_rate
-            )
-            loaded_prompt_wavs[i] = resampler(loaded_prompt_wavs[i])
+        loaded_prompt_wavs[i] = load_prompt_wav(
+            loaded_prompt_wavs[i], sampling_rate=sampling_rate
+        )
         if loaded_prompt_wavs[i].size(0) != 1:
             loaded_prompt_wavs[i] = loaded_prompt_wavs[i].mean(0, keepdim=True)
 
@@ -281,9 +312,7 @@ def generate_sentence(
     else:
         prompt_wav = torch.cat(loaded_prompt_wavs, dim=1)
 
-    prompt_rms = torch.sqrt(torch.mean(torch.square(prompt_wav)))
-    if prompt_rms < target_rms:
-        prompt_wav = prompt_wav * target_rms / prompt_rms
+    prompt_wav, prompt_rms = rms_norm(prompt_wav, target_rms)
 
     # Extract features from prompt wav
     prompt_features = feature_extractor.extract(
@@ -292,6 +321,10 @@ def generate_sentence(
 
     prompt_features = prompt_features.unsqueeze(0) * feat_scale
     prompt_features_lens = torch.tensor([prompt_features.size(1)], device=device)
+
+    # Convert text to tokens
+    tokens = tokenizer.texts_to_token_ids([text])
+    prompt_tokens = tokenizer.texts_to_token_ids([prompt_text])
 
     # Start timing
     start_t = dt.datetime.now()
@@ -347,7 +380,233 @@ def generate_sentence(
     return metrics
 
 
-def generate_sentence_stereo(
+def generate_sentence(
+    save_path: str,
+    prompt_text: str,
+    prompt_wav: Union[str, List[str]],
+    text: str,
+    model: torch.nn.Module,
+    vocoder: torch.nn.Module,
+    tokenizer: DialogTokenizer,
+    feature_extractor: VocosFbank,
+    device: torch.device,
+    num_step: int = 16,
+    guidance_scale: float = 1.0,
+    speed: float = 1.0,
+    t_shift: float = 0.5,
+    target_rms: float = 0.1,
+    feat_scale: float = 0.1,
+    sampling_rate: int = 24000,
+    max_duration: float = 100,
+    remove_long_sil: bool = False,
+):
+    """
+    Generate waveform of a text based on a given prompt waveform and its transcription,
+        this function will do the following to improve the generation quality:
+        1. chunk the text according to speaker-turn symbol [S1].
+        2. process chunked texts in batches.
+        3. remove long silences in the prompt audio.
+        4. add punctuation to the end of prompt text and text if there is not.
+
+    Args:
+        save_path (str): Path to save the generated wav.
+        prompt_text (str): Transcription of the prompt wav.
+        prompt_wav (Union[str, List[str]]): Path to the prompt wav file, can be
+            one or two wav files, which corresponding to a merged conversational
+            speech or two seperate speaker's speech.
+        text (str): Text to be synthesized into a waveform.
+        model (torch.nn.Module): The model used for generation.
+        vocoder (torch.nn.Module): The vocoder used to convert features to waveforms.
+        tokenizer (DialogTokenizer): The tokenizer used to convert text to tokens.
+        feature_extractor (VocosFbank): The feature extractor used to
+            extract acoustic features.
+        device (torch.device): The device on which computations are performed.
+        num_step (int, optional): Number of steps for decoding. Defaults to 16.
+        guidance_scale (float, optional): Scale for classifier-free guidance.
+            Defaults to 1.0.
+        speed (float, optional): Speed control. Defaults to 1.0.
+        t_shift (float, optional): Time shift. Defaults to 0.5.
+        target_rms (float, optional): Target RMS for waveform normalization.
+            Defaults to 0.1.
+        feat_scale (float, optional): Scale for features.
+            Defaults to 0.1.
+        sampling_rate (int, optional): Sampling rate for the waveform.
+            Defaults to 24000.
+        max_duration (float, optional): The maximum duration to process in each
+            batch. Used to control memory consumption when generating long audios.
+        remove_long_sil (bool, optional): Whether to remove long silences in the
+            middle of the generated speech (edge silences will be removed by default).
+    Returns:
+        metrics (dict): Dictionary containing time and real-time
+            factor metrics for processing.
+    """
+
+    # Load and preprocess prompt wav
+    if isinstance(prompt_wav, str):
+        prompt_wav = [
+            prompt_wav,
+        ]
+    else:
+        assert len(prompt_wav) == 2 and isinstance(prompt_wav[0], str)
+
+    loaded_prompt_wavs = prompt_wav
+    for i in range(len(prompt_wav)):
+        loaded_prompt_wavs[i] = load_prompt_wav(
+            loaded_prompt_wavs[i], sampling_rate=sampling_rate
+        )
+        if loaded_prompt_wavs[i].size(0) != 1:
+            loaded_prompt_wavs[i] = loaded_prompt_wavs[i].mean(0, keepdim=True)
+
+    if len(loaded_prompt_wavs) == 1:
+        prompt_wav = loaded_prompt_wavs[0]
+    else:
+        prompt_wav = torch.cat(loaded_prompt_wavs, dim=1)
+
+    # Remove long silences in the prompt wav
+    prompt_wav = remove_silence(
+        prompt_wav, sampling_rate, only_edge=False, trail_sil=200
+    )
+
+    prompt_wav, prompt_rms = rms_norm(prompt_wav, target_rms)
+
+    prompt_duration = prompt_wav.shape[-1] / sampling_rate
+
+    if prompt_duration > 40:
+        logging.warning(
+            f"Given prompt wav is too long ({prompt_duration}s). "
+            f"Please provide a shorter one."
+        )
+    elif prompt_duration > 20:
+        logging.warning(
+            f"Given prompt wav is long ({prompt_duration}s). "
+            f"It will lead to slower inference speed and possibly worse speech quality."
+        )
+
+    # Extract features from prompt wav
+    prompt_features = feature_extractor.extract(
+        prompt_wav, sampling_rate=sampling_rate
+    ).to(device)
+
+    prompt_features = prompt_features.unsqueeze(0) * feat_scale
+
+    # Add punctuation in the end if there is not
+    text = add_punctuation(text)
+    prompt_text = add_punctuation(prompt_text)
+
+    # Tokenize text (str tokens), punctuations will be preserved.
+    tokens_str = tokenizer.texts_to_tokens([text])[0]
+    prompt_tokens_str = tokenizer.texts_to_tokens([prompt_text])[0]
+
+    # chunk text so that each len(prompt wav + generated wav) is around 40 seconds.
+    token_duration = (prompt_wav.shape[-1] / sampling_rate) / (
+        len(prompt_tokens_str) * speed
+    )
+    max_tokens = int((40 - prompt_duration) / token_duration)
+    chunked_tokens_str = chunk_tokens_dialog(tokens_str, max_tokens=max_tokens)
+
+    # Tokenize text (int tokens)
+    chunked_tokens = tokenizer.tokens_to_token_ids(chunked_tokens_str)
+    prompt_tokens = tokenizer.tokens_to_token_ids([prompt_tokens_str])
+
+    # Batchify chunked texts for faster processing
+    tokens_batches, chunked_index = batchify_tokens(
+        chunked_tokens, max_duration, prompt_duration, token_duration
+    )
+
+    # Start predicting features
+    chunked_features = []
+    start_t = dt.datetime.now()
+
+    for batch_tokens in tokens_batches:
+        batch_prompt_tokens = prompt_tokens * len(batch_tokens)
+
+        batch_prompt_features = prompt_features.repeat(len(batch_tokens), 1, 1)
+        batch_prompt_features_lens = torch.full(
+            (len(batch_tokens),), prompt_features.size(1), device=device
+        )
+
+        # Generate features
+        (
+            pred_features,
+            pred_features_lens,
+            pred_prompt_features,
+            pred_prompt_features_lens,
+        ) = model.sample(
+            tokens=batch_tokens,
+            prompt_tokens=batch_prompt_tokens,
+            prompt_features=batch_prompt_features,
+            prompt_features_lens=batch_prompt_features_lens,
+            speed=speed,
+            t_shift=t_shift,
+            duration="predict",
+            num_step=num_step,
+            guidance_scale=guidance_scale,
+        )
+
+        # Postprocess predicted features
+        pred_features = pred_features.permute(0, 2, 1) / feat_scale  # (B, C, T)
+        chunked_features.append((pred_features, pred_features_lens))
+
+    # Start vocoder processing
+    chunked_wavs = []
+    start_vocoder_t = dt.datetime.now()
+
+    for pred_features, pred_features_lens in chunked_features:
+        batch_wav = []
+        for i in range(pred_features.size(0)):
+
+            wav = (
+                vocoder.decode(pred_features[i][None, :, : pred_features_lens[i]])
+                .squeeze(1)
+                .clamp(-1, 1)
+            )
+            # Adjust wav volume if necessary
+            if prompt_rms < target_rms:
+                wav = wav * prompt_rms / target_rms
+            batch_wav.append(wav)
+        chunked_wavs.extend(batch_wav)
+
+    # Finish model generation
+    t = (dt.datetime.now() - start_t).total_seconds()
+
+    # Merge chunked wavs
+    indexed_chunked_wavs = [
+        (index, wav) for index, wav in zip(chunked_index, chunked_wavs)
+    ]
+    sequential_indexed_chunked_wavs = sorted(indexed_chunked_wavs, key=lambda x: x[0])
+    sequential_chunked_wavs = [
+        sequential_indexed_chunked_wavs[i][1]
+        for i in range(len(sequential_indexed_chunked_wavs))
+    ]
+    final_wav = cross_fade_concat(
+        sequential_chunked_wavs, fade_duration=0.1, sample_rate=sampling_rate
+    )
+    final_wav = remove_silence(
+        final_wav, sampling_rate, only_edge=(not remove_long_sil), trail_sil=0
+    )
+
+    # Calculate processing time metrics
+    t_no_vocoder = (start_vocoder_t - start_t).total_seconds()
+    t_vocoder = (dt.datetime.now() - start_vocoder_t).total_seconds()
+    wav_seconds = final_wav.shape[-1] / sampling_rate
+    rtf = t / wav_seconds
+    rtf_no_vocoder = t_no_vocoder / wav_seconds
+    rtf_vocoder = t_vocoder / wav_seconds
+    metrics = {
+        "t": t,
+        "t_no_vocoder": t_no_vocoder,
+        "t_vocoder": t_vocoder,
+        "wav_seconds": wav_seconds,
+        "rtf": rtf,
+        "rtf_no_vocoder": rtf_no_vocoder,
+        "rtf_vocoder": rtf_vocoder,
+    }
+
+    torchaudio.save(save_path, final_wav.cpu(), sample_rate=sampling_rate)
+    return metrics
+
+
+def generate_sentence_stereo_raw_evaluation(
     save_path: str,
     prompt_text: str,
     prompt_wav: Union[str, List[str]],
@@ -367,8 +626,11 @@ def generate_sentence_stereo(
     silence_wav: Optional[str] = None,
 ):
     """
-    Generate waveform of a text based on a given prompt
-        waveform and its transcription.
+    Generate waveform of a text based on a given prompt waveform and its transcription,
+        this function directly feed the prompt_text, prompt_wav and text to the model.
+        It is not efficient and can have poor results for some inappropriate inputs.
+        (e.g., prompt wav contains long silence, text to be generated is too long)
+        This function can be used to evaluate the "raw" performance of the model.
 
     Args:
         save_path (str): Path to save the generated wav.
@@ -400,9 +662,6 @@ def generate_sentence_stereo(
         metrics (dict): Dictionary containing time and real-time
             factor metrics for processing.
     """
-    # Convert text to tokens
-    tokens = tokenizer.texts_to_token_ids([text])
-    prompt_tokens = tokenizer.texts_to_token_ids([prompt_text])
 
     # Load and preprocess prompt wav
     if isinstance(prompt_wav, str):
@@ -414,12 +673,9 @@ def generate_sentence_stereo(
 
     loaded_prompt_wavs = prompt_wav
     for i in range(len(prompt_wav)):
-        loaded_prompt_wavs[i], prompt_sampling_rate = torchaudio.load(prompt_wav[i])
-        if prompt_sampling_rate != sampling_rate:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=prompt_sampling_rate, new_freq=sampling_rate
-            )
-            loaded_prompt_wavs[i] = resampler(loaded_prompt_wavs[i])
+        loaded_prompt_wavs[i] = load_prompt_wav(
+            loaded_prompt_wavs[i], sampling_rate=sampling_rate
+        )
 
     if len(loaded_prompt_wavs) == 1:
         assert (
@@ -441,9 +697,7 @@ def generate_sentence_stereo(
             prompt_wav[0, : loaded_prompt_wavs[0].size(1)] = loaded_prompt_wavs[0]
             prompt_wav[1, loaded_prompt_wavs[0].size(1) :] = loaded_prompt_wavs[1]
 
-    prompt_rms = torch.sqrt(torch.mean(torch.square(prompt_wav)))
-    if prompt_rms < target_rms:
-        prompt_wav = prompt_wav * target_rms / prompt_rms
+    prompt_wav, prompt_rms = rms_norm(prompt_wav, target_rms)
 
     # Extract features from prompt wav
     prompt_features = feature_extractor.extract(
@@ -452,6 +706,10 @@ def generate_sentence_stereo(
 
     prompt_features = prompt_features.unsqueeze(0) * feat_scale
     prompt_features_lens = torch.tensor([prompt_features.size(1)], device=device)
+
+    # Convert text to tokens
+    tokens = tokenizer.texts_to_token_ids([text])
+    prompt_tokens = tokenizer.texts_to_token_ids([prompt_text])
 
     # Start timing
     start_t = dt.datetime.now()
@@ -515,6 +773,262 @@ def generate_sentence_stereo(
     return metrics
 
 
+def generate_sentence_stereo(
+    save_path: str,
+    prompt_text: str,
+    prompt_wav: Union[str, List[str]],
+    text: str,
+    model: torch.nn.Module,
+    vocoder: torch.nn.Module,
+    tokenizer: DialogTokenizer,
+    feature_extractor: VocosFbank,
+    device: torch.device,
+    num_step: int = 16,
+    guidance_scale: float = 1.0,
+    speed: float = 1.0,
+    t_shift: float = 0.5,
+    target_rms: float = 0.1,
+    feat_scale: float = 0.1,
+    sampling_rate: int = 24000,
+    silence_wav: Optional[str] = None,
+    max_duration: float = 100,
+    remove_long_sil: bool = False,
+):
+    """
+    Generate waveform of a text based on a given prompt waveform and its transcription,
+        this function will do the following to improve the generation quality:
+        1. chunk the text according to speaker-turn symbol [S1].
+        2. process chunked texts in batches.
+        3. remove long silences in the prompt audio.
+        4. add punctuation to the end of prompt text and text if there is not.
+
+    Args:
+        save_path (str): Path to save the generated wav.
+        prompt_text (str): Transcription of the prompt wav.
+        prompt_wav (Union[str, List[str]]): Path to the prompt wav file, can be
+            one or two wav files, which corresponding to a merged conversational
+            speech or two seperate speaker's speech.
+        text (str): Text to be synthesized into a waveform.
+        model (torch.nn.Module): The model used for generation.
+        vocoder (torch.nn.Module): The vocoder used to convert features to waveforms.
+        tokenizer (DialogTokenizer): The tokenizer used to convert text to tokens.
+        feature_extractor (VocosFbank): The feature extractor used to
+            extract acoustic features.
+        device (torch.device): The device on which computations are performed.
+        num_step (int, optional): Number of steps for decoding. Defaults to 16.
+        guidance_scale (float, optional): Scale for classifier-free guidance.
+            Defaults to 1.0.
+        speed (float, optional): Speed control. Defaults to 1.0.
+        t_shift (float, optional): Time shift. Defaults to 0.5.
+        target_rms (float, optional): Target RMS for waveform normalization.
+            Defaults to 0.1.
+        feat_scale (float, optional): Scale for features.
+            Defaults to 0.1.
+        sampling_rate (int, optional): Sampling rate for the waveform.
+            Defaults to 24000.
+        silence_wav (str): Path of the silence wav file, used in two-channel
+            generation with single-channel prompts
+        max_duration (float, optional): The maximum duration to process in each
+            batch. Used to control memory consumption when generating long audios.
+        remove_long_sil (bool, optional): Whether to remove long silences in the
+            middle of the generated speech (edge silences will be removed by default).
+    Returns:
+        metrics (dict): Dictionary containing time and real-time
+            factor metrics for processing.
+    """
+
+    # Load and preprocess prompt wav
+    if isinstance(prompt_wav, str):
+        prompt_wav = [
+            prompt_wav,
+        ]
+    else:
+        assert len(prompt_wav) == 2 and isinstance(prompt_wav[0], str)
+
+    loaded_prompt_wavs = prompt_wav
+    for i in range(len(prompt_wav)):
+        loaded_prompt_wavs[i] = load_prompt_wav(
+            loaded_prompt_wavs[i], sampling_rate=sampling_rate
+        )
+
+    if len(loaded_prompt_wavs) == 1:
+        assert (
+            loaded_prompt_wavs[0].size(0) == 2
+        ), "Merged prompt wav must be stereo for stereo dialogue generation"
+        prompt_wav = loaded_prompt_wavs[0]
+
+    else:
+        assert len(loaded_prompt_wavs) == 2
+        if loaded_prompt_wavs[0].size(0) == 2:
+            prompt_wav = torch.cat(loaded_prompt_wavs, dim=1)
+        else:
+            assert loaded_prompt_wavs[0].size(0) == 1
+            silence_wav, silence_sampling_rate = torchaudio.load(silence_wav)
+            assert silence_sampling_rate == sampling_rate
+            prompt_wav = silence_wav[
+                :, : loaded_prompt_wavs[0].size(1) + loaded_prompt_wavs[1].size(1)
+            ]
+            prompt_wav[0, : loaded_prompt_wavs[0].size(1)] = loaded_prompt_wavs[0]
+            prompt_wav[1, loaded_prompt_wavs[0].size(1) :] = loaded_prompt_wavs[1]
+
+    # Remove long silences in the prompt wav
+    prompt_wav = remove_silence(
+        prompt_wav, sampling_rate, only_edge=False, trail_sil=200
+    )
+
+    prompt_wav, prompt_rms = rms_norm(prompt_wav, target_rms)
+
+    prompt_duration = prompt_wav.shape[-1] / sampling_rate
+
+    if prompt_duration > 40:
+        logging.warning(
+            f"Given prompt wav is too long ({prompt_duration}s). "
+            f"Please provide a shorter one."
+        )
+    elif prompt_duration > 20:
+        logging.warning(
+            f"Given prompt wav is long ({prompt_duration}s). "
+            f"It will lead to slower inference speed and possibly worse speech quality."
+        )
+
+    # Extract features from prompt wav
+    prompt_features = feature_extractor.extract(
+        prompt_wav, sampling_rate=sampling_rate
+    ).to(device)
+
+    prompt_features = prompt_features.unsqueeze(0) * feat_scale
+
+    # Add punctuation in the end if there is not
+    text = add_punctuation(text)
+    prompt_text = add_punctuation(prompt_text)
+
+    # Tokenize text (str tokens), punctuations will be preserved.
+    tokens_str = tokenizer.texts_to_tokens([text])[0]
+    prompt_tokens_str = tokenizer.texts_to_tokens([prompt_text])[0]
+
+    # chunk text so that each len(prompt wav + generated wav) is around 40 seconds.
+    token_duration = (prompt_wav.shape[-1] / sampling_rate) / (
+        len(prompt_tokens_str) * speed
+    )
+    max_tokens = int((40 - prompt_duration) / token_duration)
+    chunked_tokens_str = chunk_tokens_dialog(tokens_str, max_tokens=max_tokens)
+
+    # Tokenize text (int tokens)
+    chunked_tokens = tokenizer.tokens_to_token_ids(chunked_tokens_str)
+    prompt_tokens = tokenizer.tokens_to_token_ids([prompt_tokens_str])
+
+    # Batchify chunked texts for faster processing
+    tokens_batches, chunked_index = batchify_tokens(
+        chunked_tokens, max_duration, prompt_duration, token_duration
+    )
+
+    # Start predicting features
+    chunked_features = []
+    start_t = dt.datetime.now()
+
+    for batch_tokens in tokens_batches:
+        batch_prompt_tokens = prompt_tokens * len(batch_tokens)
+
+        batch_prompt_features = prompt_features.repeat(len(batch_tokens), 1, 1)
+        batch_prompt_features_lens = torch.full(
+            (len(batch_tokens),), prompt_features.size(1), device=device
+        )
+
+        # Generate features
+        (
+            pred_features,
+            pred_features_lens,
+            pred_prompt_features,
+            pred_prompt_features_lens,
+        ) = model.sample(
+            tokens=batch_tokens,
+            prompt_tokens=batch_prompt_tokens,
+            prompt_features=batch_prompt_features,
+            prompt_features_lens=batch_prompt_features_lens,
+            speed=speed,
+            t_shift=t_shift,
+            duration="predict",
+            num_step=num_step,
+            guidance_scale=guidance_scale,
+        )
+
+        # Postprocess predicted features
+        pred_features = pred_features.permute(0, 2, 1) / feat_scale  # (B, C, T)
+        chunked_features.append((pred_features, pred_features_lens))
+
+    # Start vocoder processing
+    chunked_wavs = []
+    start_vocoder_t = dt.datetime.now()
+
+    for pred_features, pred_features_lens in chunked_features:
+        batch_wav = []
+        for i in range(pred_features.size(0)):
+
+            feat_dim = pred_features.size(1) // 2
+            wav_left = (
+                vocoder.decode(
+                    pred_features[i][None, :feat_dim, : pred_features_lens[i]]
+                )
+                .squeeze(1)
+                .clamp(-1, 1)
+            )
+            wav_right = (
+                vocoder.decode(
+                    pred_features[i][
+                        None, feat_dim : feat_dim * 2, : pred_features_lens[i]
+                    ]
+                )
+                .squeeze(1)
+                .clamp(-1, 1)
+            )
+            wav = torch.cat([wav_left, wav_right], dim=0)
+
+            # Adjust wav volume if necessary
+            if prompt_rms < target_rms:
+                wav = wav * prompt_rms / target_rms
+            batch_wav.append(wav)
+        chunked_wavs.extend(batch_wav)
+
+    # Finish model generation
+    t = (dt.datetime.now() - start_t).total_seconds()
+
+    # Merge chunked wavs
+    indexed_chunked_wavs = [
+        (index, wav) for index, wav in zip(chunked_index, chunked_wavs)
+    ]
+    sequential_indexed_chunked_wavs = sorted(indexed_chunked_wavs, key=lambda x: x[0])
+    sequential_chunked_wavs = [
+        sequential_indexed_chunked_wavs[i][1]
+        for i in range(len(sequential_indexed_chunked_wavs))
+    ]
+    final_wav = cross_fade_concat(
+        sequential_chunked_wavs, fade_duration=0.1, sample_rate=sampling_rate
+    )
+    final_wav = remove_silence(
+        final_wav, sampling_rate, only_edge=(not remove_long_sil), trail_sil=0
+    )
+
+    # Calculate processing time metrics
+    t_no_vocoder = (start_vocoder_t - start_t).total_seconds()
+    t_vocoder = (dt.datetime.now() - start_vocoder_t).total_seconds()
+    wav_seconds = final_wav.shape[-1] / sampling_rate
+    rtf = t / wav_seconds
+    rtf_no_vocoder = t_no_vocoder / wav_seconds
+    rtf_vocoder = t_vocoder / wav_seconds
+    metrics = {
+        "t": t,
+        "t_no_vocoder": t_no_vocoder,
+        "t_vocoder": t_vocoder,
+        "wav_seconds": wav_seconds,
+        "rtf": rtf,
+        "rtf_no_vocoder": rtf_no_vocoder,
+        "rtf_vocoder": rtf_vocoder,
+    }
+
+    torchaudio.save(save_path, final_wav.cpu(), sample_rate=sampling_rate)
+    return metrics
+
+
 def generate_list(
     model_name: str,
     res_dir: str,
@@ -532,6 +1046,9 @@ def generate_list(
     feat_scale: float = 0.1,
     sampling_rate: int = 24000,
     silence_wav: Optional[str] = None,
+    raw_evaluation: bool = False,
+    max_duration: float = 100,
+    remove_long_sil: bool = False,
 ):
     total_t = []
     total_t_no_vocoder = []
@@ -562,48 +1079,49 @@ def generate_list(
 
         save_path = f"{res_dir}/{wav_name}.wav"
 
-        if model_name == "zipvoice_dialog":
+        common_params = {
+            "save_path": save_path,
+            "prompt_text": prompt_text,
+            "prompt_wav": prompt_wav,
+            "text": text,
+            "model": model,
+            "vocoder": vocoder,
+            "tokenizer": tokenizer,
+            "feature_extractor": feature_extractor,
+            "device": device,
+            "num_step": num_step,
+            "guidance_scale": guidance_scale,
+            "speed": speed,
+            "t_shift": t_shift,
+            "target_rms": target_rms,
+            "feat_scale": feat_scale,
+            "sampling_rate": sampling_rate,
+        }
 
-            metrics = generate_sentence(
-                save_path=save_path,
-                prompt_text=prompt_text,
-                prompt_wav=prompt_wav,
-                text=text,
-                model=model,
-                vocoder=vocoder,
-                tokenizer=tokenizer,
-                feature_extractor=feature_extractor,
-                device=device,
-                num_step=num_step,
-                guidance_scale=guidance_scale,
-                speed=speed,
-                t_shift=t_shift,
-                target_rms=target_rms,
-                feat_scale=feat_scale,
-                sampling_rate=sampling_rate,
-            )
+        if model_name == "zipvoice_dialog":
+            if raw_evaluation:
+                metrics = generate_sentence_raw_evaluation(**common_params)
+            else:
+                metrics = generate_sentence(
+                    **common_params,
+                    max_duration=max_duration,
+                    remove_long_sil=remove_long_sil,
+                )
         else:
             assert model_name == "zipvoice_dialog_stereo"
-            metrics = generate_sentence_stereo(
-                save_path=save_path,
-                prompt_text=prompt_text,
-                prompt_wav=prompt_wav,
-                text=text,
-                model=model,
-                vocoder=vocoder,
-                tokenizer=tokenizer,
-                feature_extractor=feature_extractor,
-                device=device,
-                num_step=num_step,
-                guidance_scale=guidance_scale,
-                speed=speed,
-                t_shift=t_shift,
-                target_rms=target_rms,
-                feat_scale=feat_scale,
-                sampling_rate=sampling_rate,
-                silence_wav=silence_wav,
-            )
-
+            if raw_evaluation:
+                metrics = generate_sentence_stereo_raw_evaluation(
+                    **common_params,
+                    silence_wav=silence_wav,
+                )
+            else:
+                metrics = generate_sentence_stereo(
+                    **common_params,
+                    silence_wav=silence_wav,
+                    max_duration=max_duration,
+                    remove_long_sil=remove_long_sil,
+                )
+        logging.info(f"[Sentence: {i}] Saved to: {save_path}")
         logging.info(f"[Sentence: {i}] RTF: {metrics['rtf']:.4f}")
         total_t.append(metrics["t"])
         total_t_no_vocoder.append(metrics["t_no_vocoder"])
@@ -645,12 +1163,11 @@ def main():
         model_config = params.model_dir / "model.json"
         token_file = params.model_dir / "tokens.txt"
         logging.info(
-            f"Using local model dir {params.model_dir}, "
+            f"Using {params.model_name} in local model dir {params.model_dir}, "
             f"checkpoint {params.checkpoint_name}"
         )
     else:
-        logging.info("Using pretrained model from the huggingface")
-        logging.info("Downloading the requires files from HuggingFace")
+        logging.info(f"Using pretrained {params.model_name} model from the Huggingface")
         model_ckpt = hf_hub_download(
             HUGGINGFACE_REPO, filename=f"{MODEL_DIR[params.model_name]}/model.pt"
         )
@@ -661,8 +1178,6 @@ def main():
         token_file = hf_hub_download(
             HUGGINGFACE_REPO, filename=f"{MODEL_DIR[params.model_name]}/tokens.txt"
         )
-
-    logging.info("Loading model...")
 
     tokenizer = DialogTokenizer(token_file=token_file)
 
@@ -742,6 +1257,9 @@ def main():
         feat_scale=params.feat_scale,
         sampling_rate=params.sampling_rate,
         silence_wav=params.silence_wav,
+        raw_evaluation=params.raw_evaluation,
+        max_duration=params.max_duration,
+        remove_long_sil=params.remove_long_sil,
     )
     logging.info("Done")
 

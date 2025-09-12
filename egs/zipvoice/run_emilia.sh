@@ -137,7 +137,8 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
             --test-list test.tsv \
             --res-dir results/test \
             --num-step 16 \
-            --guidance-scale 1
+            --guidance-scale 1 \
+            --raw-evaluation True
 fi
 
 
@@ -151,7 +152,8 @@ if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
             --test-list test.tsv \
             --res-dir results/test_distill \
             --num-step 8 \
-            --guidance-scale 3
+            --guidance-scale 3 \
+            --raw-evaluation True
 fi
 
 

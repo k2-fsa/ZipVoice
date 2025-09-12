@@ -149,15 +149,9 @@ python3 -m zipvoice.bin.infer_zipvoice \
     --text "I am the text to be synthesized." \
     --res-wav-path result.wav
 ```
-
 - `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
+- By default, we use the `zipvoice` model for better quality. If faster speed is a priority, you can switch to the `zipvoice_distill` and can reduce the `--num-steps` to as low as `4`.
 - If `<>` or `[]` appear in the text, strings enclosed by them will be treated as special tokens. `<>` denotes Chinese pinyin and `[]` denotes other special tags.
-- Could run ONNX models on CPU faster with `zipvoice.bin.infer_zipvoice_onnx`.
-
-> **Note:** If you have trouble connecting to HuggingFace, try:
-> ```bash
-> export HF_ENDPOINT=https://hf-mirror.com
-> ```
 
 #### 1.2 Inference of a list of sentences
 
@@ -213,9 +207,30 @@ Each line of `test.tsv` is in one of the following formats:
 - `spk2_prompt_wav` is the path to the second speaker's prompt wav file.
 - `text` is the text to be synthesized, e.g. "[S1] I'm fine. [S2] What's your name? [S1] I'm Eric. [S2] Hi Eric."
 
-### 3. Other features
+### 3 Guidance for better usage:
 
-#### 3.1 Correcting mispronounced chinese polyphone characters
+#### 3.1 Prompt length
+
+We recommand a short prompt wav file (e.g., less than 3 seconds for single-speaker speech generation, less than 10 seconds for dialogue speech generation) for faster inference speed. A very long prompt will slow down the inference and degenerate the speech quality.
+
+
+#### 3.2 Short text
+
+When generating speech for very short texts (e.g., one or two words), the generated speech may sometimes omit certain pronunciations. To resolve this issue, you can pass `--speed 0.3` (where 0.3 is a tunable value) to extend the duration of the generated speech.
+
+#### 3.3 Memory control
+
+The given text will be splitted into chunks based on punctuation (for single-speaker speech generation) or speaker-turn symbol (for dialogue speech generation). Then, the chunked texts will be processed in batches. Therefore, the model can process arbitrarily long text with almost constant memory usage. You can control memory usage by adjusting the `--max-duration` parameter.
+
+#### 3.4 "Raw" evaluation
+
+By default, we preprocess inputs (prompt wav, prompt transcription, and text) for efficient inference and better performance. If you want to evaluate the model’s "raw" performance using exact provided inputs (e.g., to reproduce the results in our paper), you can pass `--raw-evaluation True`.
+
+#### 3.5 Model downloading
+
+If you have trouble connecting to HuggingFace when downloading the pre-trained models, try `export HF_ENDPOINT=https://hf-mirror.com`.
+
+#### 3.6 Correcting mispronounced chinese polyphone characters
 
 We use [pypinyin](https://github.com/mozillazg/python-pinyin) to convert Chinese characters to pinyin. However, it can occasionally mispronounce **polyphone characters** (多音字).
 
@@ -228,9 +243,17 @@ To manually correct these mispronunciations, enclose the **corrected pinyin** in
 
 > **Note:** If you want to manually assign multiple pinyins, enclose each pinyin with `<>`, e.g., `这把<jian4><chang2><san1>十公分`
 
+#### 3.7 Remove long silences from the generated speech
+
+Model will automatically determine the positions and lengths of silences in the generated speech. It occasionally has long silence in the middle of the speech. If you don't want this, you can pass `--remove-long-sil` to remove long silences in the middle of the generated speech (edge silences will be removed by default).
+
 ## Train Your Own Model
 
 See the [egs](egs) directory for training, fine-tuning and evaluation examples.
+
+## C++ Deployment
+
+Check [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx/pull/2487#issuecomment-3227884498) for the C++ deployment solution on CPU.
 
 ## Discussion & Communication
 

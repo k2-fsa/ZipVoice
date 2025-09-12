@@ -617,8 +617,7 @@ def main():
         token_file = params.model_dir / "tokens.txt"
         logging.info(f"Using local model dir {params.model_dir}.")
     else:
-        logging.info("Using pretrained model from the huggingface")
-        logging.info("Downloading the requires files from HuggingFace")
+        logging.info("Using pretrained model from the Huggingface")
         text_encoder_path = hf_hub_download(
             HUGGINGFACE_REPO,
             filename=f"{MODEL_DIR[params.model_name]}/{text_encoder_name}",
