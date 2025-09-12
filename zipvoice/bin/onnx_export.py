@@ -349,7 +349,7 @@ def main():
     tokenizer = SimpleTokenizer(token_file)
     tokenizer_config = {"vocab_size": tokenizer.vocab_size, "pad_id": tokenizer.pad_id}
 
-    with open(model_config, "r") as f:
+    with open(model_config, "r", encoding="utf-8") as f:
         model_config = json.load(f)
 
     if params.model_name == "zipvoice":

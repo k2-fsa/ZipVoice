@@ -193,7 +193,7 @@ def prepare_dataset(
     # Step 1: Read all unique recording paths
     recordings_path_set = set()
     supervision_list = list()
-    with open(tsv_path, "r") as fr:
+    with open(tsv_path, "r", encoding="utf-8") as fr:
         for line in fr:
             items = line.strip().split("\t")
             if len(items) == 3:

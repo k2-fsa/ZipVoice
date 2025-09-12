@@ -155,7 +155,7 @@ def prepare_subset(
     logging.info(f"Reading {jsonl_path}")
     recordings_path_set = set()
     supervision_list = list()
-    with open(jsonl_path, "r") as fr:
+    with open(jsonl_path, "r", encoding="utf-8") as fr:
         for line in fr:
             try:
                 items = json.loads(line)
