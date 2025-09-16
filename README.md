@@ -89,7 +89,7 @@ ZipVoice is a series of fast and high-quality zero-shot TTS models based on flow
 
 **2025/07/14**: **ZipVoice-Dialog** and **ZipVoice-Dialog-Stereo**, two spoken dialogue generation models, are released. [![arXiv](https://img.shields.io/badge/arXiv-Paper-COLOR.svg)](https://arxiv.org/abs/2507.09318) [![demo page](https://img.shields.io/badge/GitHub.io-Demo_Page-blue?logo=Github&style=flat-square)](https://zipvoice-dialog.github.io)
 
-**2025/07/14**: **OpenDialog** dataset, a 6.8k-hour spoken dialogue dataset, is realeased. Download at [![hf](https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Dataset-yellow)](https://huggingface.co/datasets/k2-fsa/OpenDialog), [![ms](https://img.shields.io/badge/ModelScope-Dataset-blue?logo=data)](https://www.modelscope.cn/datasets/k2-fsa/OpenDialog). Check details at [![arXiv](https://img.shields.io/badge/arXiv-Paper-COLOR.svg)](https://arxiv.org/abs/2507.09318).
+**2025/07/14**: **OpenDialog** dataset, a 6.8k-hour spoken dialogue dataset, is released. Download at [![hf](https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Dataset-yellow)](https://huggingface.co/datasets/k2-fsa/OpenDialog), [![ms](https://img.shields.io/badge/ModelScope-Dataset-blue?logo=data)](https://www.modelscope.cn/datasets/k2-fsa/OpenDialog). Check details at [![arXiv](https://img.shields.io/badge/arXiv-Paper-COLOR.svg)](https://arxiv.org/abs/2507.09318).
 
 **2025/06/16**: **ZipVoice** and **ZipVoice-Distill** are released. [![arXiv](https://img.shields.io/badge/arXiv-Paper-COLOR.svg)](https://arxiv.org/abs/2506.13053) [![demo page](https://img.shields.io/badge/GitHub.io-Demo_Page-blue?logo=Github&style=flat-square)](https://zipvoice.github.io)
 
@@ -129,7 +129,7 @@ Users in China mainland can refer to https://k2-fsa.org/zh-CN/get-started/k2/.
 
 - To check the k2 installation:
 
-```
+```bash
 python3 -c "import k2; print(k2.__file__)"
 ```
 
@@ -196,7 +196,7 @@ Each line of `test.tsv` is in one of the following formats:
 (2) **Splitted prompt format** where the audios and transciptions of two speakers exist in separate files:
 
 ```
-{wav_name}\t{spk1_prompt_transcription}\t{spk2_prompt_transcription}\t{spk1_prompt_wav}\t{spk2_prompt_wav}\t{text}'
+{wav_name}\t{spk1_prompt_transcription}\t{spk2_prompt_transcription}\t{spk1_prompt_wav}\t{spk2_prompt_wav}\t{text}
 ```
 
 - `wav_name` is the name of the output wav file.
