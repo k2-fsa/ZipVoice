@@ -115,6 +115,27 @@ def get_parser():
     )
 
     parser.add_argument(
+        "--master-addr",
+        type=str,
+        help="Master node address for DDP training (used in multi-machine setup).",
+    )
+
+    parser.add_argument(
+        "--local-rank-start",
+        type=int,
+        default=0,
+        help="""Start rank of processes on the current machine, used in multi-machine
+        setup, e.g., 0 for first machine, 8 for second).""",
+    )
+
+    parser.add_argument(
+        "--local-world-size",
+        type=int,
+        help="""Number of processes (GPUs) on the current machine, used in 
+        multi-machine setup""",
+    )
+
+    parser.add_argument(
         "--tensorboard",
         type=str2bool,
         default=True,
@@ -857,10 +878,10 @@ def tokenize_text(c: Cut, tokenizer):
     return c
 
 
-def run(rank, world_size, args):
+def run(local_rank, world_size, args):
     """
     Args:
-      rank:
+      local:
         It is a value between 0 and `world_size-1`, which is
         passed automatically by `mp.spawn()` in :func:`main`.
         The node with rank 0 is responsible for saving checkpoint.
@@ -869,6 +890,8 @@ def run(rank, world_size, args):
       args:
         The return value of get_parser().parse_args()
     """
+    global_rank = args.local_rank_start + local_rank
+
     params = get_params()
     params.update(vars(args))
     params.valid_interval = params.save_every_n
@@ -882,20 +905,22 @@ def run(rank, world_size, args):
 
     fix_random_seed(params.seed)
     if world_size > 1:
-        setup_dist(rank, world_size, params.master_port)
+        setup_dist(
+            global_rank, world_size, params.master_port, master_addr=params.master_addr
+        )
 
     os.makedirs(f"{params.exp_dir}", exist_ok=True)
     copyfile(src=params.model_config, dst=f"{params.exp_dir}/model.json")
     copyfile(src=params.token_file, dst=f"{params.exp_dir}/tokens.txt")
     setup_logger(f"{params.exp_dir}/log/log-train")
 
-    if args.tensorboard and rank == 0:
+    if args.tensorboard and global_rank == 0:
         tb_writer = SummaryWriter(log_dir=f"{params.exp_dir}/tensorboard")
     else:
         tb_writer = None
 
     if torch.cuda.is_available():
-        params.device = torch.device("cuda", rank)
+        params.device = torch.device("cuda", local_rank)
     else:
         params.device = torch.device("cpu")
     logging.info(f"Device: {params.device}")
@@ -929,8 +954,8 @@ def run(rank, world_size, args):
     logging.info(f"Number of parameters : {num_param}")
 
     model_avg: Optional[nn.Module] = None
-    if rank == 0:
-        # model_avg is only used with rank 0
+    if global_rank == 0:
+        # model_avg is only used with global rank 0
         model_avg = copy.deepcopy(model).to(torch.float64)
 
     assert params.start_epoch > 0, params.start_epoch
@@ -940,7 +965,7 @@ def run(rank, world_size, args):
     model = model.to(params.device)
     if world_size > 1:
         logging.info("Using DDP")
-        model = DDP(model, device_ids=[rank], find_unused_parameters=True)
+        model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
 
     optimizer = ScaledAdam(
         get_parameter_groups_with_lrs(
@@ -1071,7 +1096,7 @@ def run(rank, world_size, args):
             scaler=scaler,
             tb_writer=tb_writer,
             world_size=world_size,
-            rank=rank,
+            rank=global_rank,
         )
 
         if params.num_iters > 0 and params.batch_idx_train > params.num_iters:
@@ -1091,10 +1116,10 @@ def run(rank, world_size, args):
             scheduler=scheduler,
             sampler=train_dl.sampler,
             scaler=scaler,
-            rank=rank,
+            rank=global_rank,
         )
 
-        if rank == 0:
+        if global_rank == 0:
             if params.best_train_epoch == params.cur_epoch:
                 best_train_filename = params.exp_dir / "best-train-loss.pt"
                 copyfile(src=filename, dst=best_train_filename)
@@ -1119,7 +1144,11 @@ def main():
     world_size = args.world_size
     assert world_size >= 1
     if world_size > 1:
-        mp.spawn(run, args=(world_size, args), nprocs=world_size, join=True)
+        if args.local_world_size is None:
+            local_world_size = world_size
+        else:
+            local_world_size = args.local_world_size
+        mp.spawn(run, args=(world_size, args), nprocs=local_world_size, join=True)
     else:
         run(rank=0, world_size=1, args=args)
 
