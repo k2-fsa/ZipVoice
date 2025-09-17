@@ -715,7 +715,7 @@ def generate_list(
     total_t_vocoder = []
     total_wav_seconds = []
 
-    with open(test_list, "r") as fr:
+    with open(test_list, "r", encoding="utf-8") as fr:
         lines = fr.readlines()
 
     for i, line in enumerate(lines):
@@ -855,7 +855,7 @@ def main():
         assert params.tokenizer == "simple"
         tokenizer = SimpleTokenizer(token_file=token_file)
 
-    with open(model_config, "r") as f:
+    with open(model_config, "r", encoding="utf-8") as f:
         model_config = json.load(f)
 
     model = OnnxModel(text_encoder_path, fm_decoder_path, num_thread=args.num_thread)
