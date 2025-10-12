@@ -42,3 +42,7 @@ profile = "black"
 
 [tool.black]
 line-length = 88
+
+
+[tool.uv]
+find-links = ["https://k2-fsa.github.io/icefall/piper_phonemize.html"]
