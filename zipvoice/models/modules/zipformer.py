@@ -984,12 +984,12 @@ class CompactRelPositionalEncoding(torch.nn.Module):
         """Reset the positional encodings."""
         T = x.size(0) + left_context_len
 
-        if self.pe is not None:
-            # self.pe contains both positive and negative parts
-            # the length of self.pe is 2 * input_len - 1
-            if self.pe.size(0) >= T * 2 - 1:
-                self.pe = self.pe.to(dtype=x.dtype, device=x.device)
-                return
+        # if self.pe is not None:
+        #     # self.pe contains both positive and negative parts
+        #     # the length of self.pe is 2 * input_len - 1
+        #     if self.pe.size(0) >= T * 2 - 1:
+        #         self.pe = self.pe.to(dtype=x.dtype, device=x.device)
+        #         return
 
         # if T == 4, x would contain [ -3, -2, 1, 0, 1, 2, 3 ]
         x = torch.arange(-(T - 1), T, device=x.device).to(torch.float32).unsqueeze(1)

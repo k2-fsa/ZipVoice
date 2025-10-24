@@ -253,21 +253,21 @@ def export_text_encoder(
         },
     )
 
-    meta_data = {
-        "version": "1",
-        "model_author": "k2-fsa",
-        "comment": "ZipVoice text encoder",
-        "use_espeak": "1",
-        "use_pinyin": "1",
-    }
-    logging.info(f"meta_data: {meta_data}")
-    add_meta_data(filename=filename, meta_data=meta_data)
+    # meta_data = {
+    #     "version": "1",
+    #     "model_author": "k2-fsa",
+    #     "comment": "ZipVoice text encoder",
+    #     "use_espeak": "1",
+    #     "use_pinyin": "1",
+    # }
+    # logging.info(f"meta_data: {meta_data}")
+    # add_meta_data(filename=filename, meta_data=meta_data)
 
     logging.info(f"Exported to {filename}")
 
 
 def export_fm_decoder(
-    model: OnnxFlowMatchingModel,
+    model: torch.nn.Module,
     filename: str,
     opset_version: int = 13,
 ) -> None:
@@ -281,47 +281,56 @@ def export_fm_decoder(
       opset_version:
         The opset version to use.
     """
+
+
     feat_dim = model.feat_dim
     seq_len = 200
     t = torch.tensor(0.5, dtype=torch.float32)
+
     x = torch.randn(1, seq_len, feat_dim, dtype=torch.float32)
     text_condition = torch.randn(1, seq_len, feat_dim, dtype=torch.float32)
     speech_condition = torch.randn(1, seq_len, feat_dim, dtype=torch.float32)
+    xt= torch.cat([x, text_condition, speech_condition], dim=2)
+
     guidance_scale = torch.tensor(1.0, dtype=torch.float32)
 
-    model = torch.jit.trace(
-        model, (t, x, text_condition, speech_condition, guidance_scale)
-    )
-
+    # model = torch.jit.trace(
+    #     model, (t, x, text_condition, speech_condition, guidance_scale)
+    # )
+    padding_mask = torch.zeros(1, seq_len, dtype=torch.bool)
+    t = t.unsqueeze(0)
+    guidance_scale = guidance_scale.unsqueeze(0)
+    estimator = model.fm_decoder
+    estimator = torch.jit.trace(estimator, (xt, t, padding_mask, guidance_scale))
     torch.onnx.export(
-        model,
-        (t, x, text_condition, speech_condition, guidance_scale),
+        estimator,
+        (xt, t, padding_mask, guidance_scale),
         filename,
-        verbose=False,
-        opset_version=opset_version,
-        input_names=["t", "x", "text_condition", "speech_condition", "guidance_scale"],
-        output_names=["v"],
+        opset_version=18,
+        input_names=['x', 't', 'padding_mask', 'guidance_scale'],
+        output_names=['v'],
         dynamic_axes={
-            "x": {0: "N", 1: "T"},
-            "text_condition": {0: "N", 1: "T"},
-            "speech_condition": {0: "N", 1: "T"},
-            "v": {0: "N", 1: "T"},
+            'x': {0: 'N', 1: 'T'},
+            't': {0: 'N'},
+            'padding_mask': {0: 'N', 1: 'T'},
+            'guidance_scale': {0: 'N'},
+            'v': {0: 'N', 1: 'T'},
         },
     )
 
-    meta_data = {
-        "version": "1",
-        "model_author": "k2-fsa",
-        "comment": "ZipVoice flow-matching decoder",
-        "feat_dim": str(feat_dim),
-        "sample_rate": "24000",
-        "n_fft": "1024",
-        "hop_length": "256",
-        "window_length": "1024",
-        "num_mels": "100",
-    }
-    logging.info(f"meta_data: {meta_data}")
-    add_meta_data(filename=filename, meta_data=meta_data)
+    # meta_data = {
+    #     "version": "1",
+    #     "model_author": "k2-fsa",
+    #     "comment": "ZipVoice flow-matching decoder",
+    #     "feat_dim": str(feat_dim),
+    #     "sample_rate": "24000",
+    #     "n_fft": "1024",
+    #     "hop_length": "256",
+    #     "window_length": "1024",
+    #     "num_mels": "100",
+    # }
+    # logging.info(f"meta_data: {meta_data}")
+    # add_meta_data(filename=filename, meta_data=meta_data)
 
     logging.info(f"Exported to {filename}")
 
@@ -382,41 +391,41 @@ def main():
     logging.info("Exporting model")
     onnx_model_dir = Path(params.onnx_model_dir)
     onnx_model_dir.mkdir(parents=True, exist_ok=True)
-    opset_version = 13
+    opset_version = 18
 
-    text_encoder = OnnxTextModel(model=model)
-    text_encoder_file = onnx_model_dir / "text_encoder.onnx"
-    export_text_encoder(
-        model=text_encoder,
-        filename=text_encoder_file,
-        opset_version=opset_version,
-    )
+    # text_encoder = OnnxTextModel(model=model)
+    # text_encoder_file = onnx_model_dir / "text_encoder.onnx"
+    # export_text_encoder(
+    #     model=text_encoder,
+    #     filename=text_encoder_file,
+    #     opset_version=opset_version,
+    # )
 
-    fm_decoder = OnnxFlowMatchingModel(model=model, distill=distill)
+    # fm_decoder = OnnxFlowMatchingModel(model=model, distill=distill)
     fm_decoder_file = onnx_model_dir / "fm_decoder.onnx"
     export_fm_decoder(
-        model=fm_decoder,
+        model=model,
         filename=fm_decoder_file,
         opset_version=opset_version,
     )
 
     logging.info("Generate int8 quantization models")
 
-    text_encoder_int8_file = onnx_model_dir / "text_encoder_int8.onnx"
-    quantize_dynamic(
-        model_input=text_encoder_file,
-        model_output=text_encoder_int8_file,
-        op_types_to_quantize=["MatMul"],
-        weight_type=QuantType.QInt8,
-    )
+    # text_encoder_int8_file = onnx_model_dir / "text_encoder_int8.onnx"
+    # quantize_dynamic(
+    #     model_input=text_encoder_file,
+    #     model_output=text_encoder_int8_file,
+    #     op_types_to_quantize=["MatMul"],
+    #     weight_type=QuantType.QInt8,
+    # )
 
-    fm_decoder_int8_file = onnx_model_dir / "fm_decoder_int8.onnx"
-    quantize_dynamic(
-        model_input=fm_decoder_file,
-        model_output=fm_decoder_int8_file,
-        op_types_to_quantize=["MatMul"],
-        weight_type=QuantType.QInt8,
-    )
+    # fm_decoder_int8_file = onnx_model_dir / "fm_decoder_int8.onnx"
+    # quantize_dynamic(
+    #     model_input=fm_decoder_file,
+    #     model_output=fm_decoder_int8_file,
+    #     op_types_to_quantize=["MatMul"],
+    #     weight_type=QuantType.QInt8,
+    # )
 
     logging.info("Done!")
 

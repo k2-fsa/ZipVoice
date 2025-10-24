@@ -132,6 +132,45 @@ class ZipVoice(nn.Module):
         self.embed = nn.Embedding(vocab_size, text_embed_dim)
         self.solver = EulerSolver(self, func_name="forward_fm_decoder")
 
+
+    def forward_fm_decoder_trt(self, x, t, padding_mask, guidance_scale):
+        x = x.to(torch.float16)
+        t = t.to(torch.float16)
+        padding_mask = padding_mask.to(torch.float16)
+        guidance_scale = guidance_scale.to(torch.float16)
+        [estimator, stream], trt_engine = self.fm_decoder.acquire_estimator()
+        # NOTE need to synchronize when switching stream
+        torch.cuda.current_stream().synchronize()
+        batch_size = x.size(0)
+        seq_len = x.size(1)
+        
+        # Create output tensor with shape (N, T, 100)
+        output = torch.empty(batch_size, seq_len, self.feat_dim, dtype=x.dtype, device=x.device)
+        
+        with stream:
+            estimator.set_input_shape('x', (batch_size, x.size(1), x.size(2)))
+            estimator.set_input_shape('t', (batch_size,))
+            estimator.set_input_shape('padding_mask', (batch_size, padding_mask.size(1)))
+            estimator.set_input_shape('guidance_scale', (batch_size,))
+            
+            # Set input tensor addresses
+            input_data_ptrs = [x.contiguous().data_ptr(), t.contiguous().data_ptr(), padding_mask.contiguous().data_ptr(), guidance_scale.contiguous().data_ptr()]
+            for i, j in enumerate(input_data_ptrs):
+                estimator.set_tensor_address(trt_engine.get_tensor_name(i), j)
+            
+            # Set output tensor address
+            # The output tensor name should be the last tensor name in the engine
+            num_tensors = trt_engine.num_io_tensors
+            output_tensor_name = trt_engine.get_tensor_name(num_tensors - 1)  # Last tensor is output
+            estimator.set_tensor_address(output_tensor_name, output.contiguous().data_ptr())
+            
+            # run trt engine
+            assert estimator.execute_async_v3(torch.cuda.current_stream().cuda_stream) is True
+            torch.cuda.current_stream().synchronize()
+        self.fm_decoder.release_estimator(estimator, stream)
+        # breakpoint()
+        return output.to(torch.float32)
+
     def forward_fm_decoder(
         self,
         t: torch.Tensor,
@@ -176,12 +215,20 @@ class ZipVoice(nn.Module):
                 guidance_scale = guidance_scale.squeeze(-1)
             if guidance_scale.dim() == 0:
                 guidance_scale = guidance_scale.repeat(xt.shape[0])
-
-            vt = self.fm_decoder(
-                x=xt, t=t, padding_mask=padding_mask, guidance_scale=guidance_scale
-            )
+            if isinstance(self.fm_decoder, torch.nn.Module):
+                vt = self.fm_decoder(
+                    x=xt, t=t, padding_mask=padding_mask, guidance_scale=guidance_scale
+                )
+            else:
+                print("forward_fm_decoder_trt=============================================")
+                vt = self.forward_fm_decoder_trt(
+                    x=xt, t=t, padding_mask=padding_mask, guidance_scale=guidance_scale
+                )
         else:
-            vt = self.fm_decoder(x=xt, t=t, padding_mask=padding_mask)
+            if isinstance(self.fm_decoder, torch.nn.Module):
+                vt = self.fm_decoder(x=xt, t=t, padding_mask=padding_mask)
+            else:
+                vt = self.forward_fm_decoder_trt(t=t, xt=xt, text_condition=text_condition, speech_condition=speech_condition, padding_mask=padding_mask)
         return vt
 
     def forward_text_embed(

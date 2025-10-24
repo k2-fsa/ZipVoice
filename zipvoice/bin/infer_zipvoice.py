@@ -276,6 +276,13 @@ def get_parser():
         help="Whether to remove long silences in the middle of the generated "
         "speech (edge silences will be removed by default).",
     )
+
+    parser.add_argument(
+        "--enable-trt",
+        type=str2bool,
+        default=False,
+        help="Whether to enable TensorRT for inference.",
+    )
     return parser
 
 
@@ -807,6 +814,11 @@ def main():
     model = model.to(params.device)
     model.eval()
 
+    if params.enable_trt:
+        from zipvoice.utils.tensorrt import load_trt
+        trt_model = f'models/zipvoice_distill_onnx_trt/fm_decoder.fp16.plan'
+        onnx_model = f'models/zipvoice_distill_onnx_trt/fm_decoder.simplified.onnx'
+        load_trt(model, trt_model, onnx_model)
     vocoder = get_vocoder(params.vocoder_path)
     vocoder = vocoder.to(params.device)
     vocoder.eval()
@@ -846,26 +858,30 @@ def main():
         assert (
             not params.raw_evaluation
         ), "Raw evaluation is only valid with --test-list"
-        generate_sentence(
-            save_path=params.res_wav_path,
-            prompt_text=params.prompt_text,
-            prompt_wav=params.prompt_wav,
-            text=params.text,
-            model=model,
-            vocoder=vocoder,
-            tokenizer=tokenizer,
-            feature_extractor=feature_extractor,
-            device=params.device,
-            num_step=params.num_step,
-            guidance_scale=params.guidance_scale,
-            speed=params.speed,
-            t_shift=params.t_shift,
-            target_rms=params.target_rms,
-            feat_scale=params.feat_scale,
-            sampling_rate=params.sampling_rate,
-            max_duration=params.max_duration,
-            remove_long_sil=params.remove_long_sil,
-        )
+        start_t = dt.datetime.now()
+        for i in range(100):
+            generate_sentence(
+                save_path=params.res_wav_path,
+                prompt_text=params.prompt_text,
+                prompt_wav=params.prompt_wav,
+                text=params.text,
+                model=model,
+                vocoder=vocoder,
+                tokenizer=tokenizer,
+                feature_extractor=feature_extractor,
+                device=params.device,
+                num_step=params.num_step,
+                guidance_scale=params.guidance_scale,
+                speed=params.speed,
+                t_shift=params.t_shift,
+                target_rms=params.target_rms,
+                feat_scale=params.feat_scale,
+                sampling_rate=params.sampling_rate,
+                max_duration=params.max_duration,
+                remove_long_sil=params.remove_long_sil,
+            )
+        t = (dt.datetime.now() - start_t).total_seconds()
+        logging.info(f"Time: {t:.4f} seconds")
         logging.info(f"Saved to: {params.res_wav_path}")
     logging.info("Done")
 
