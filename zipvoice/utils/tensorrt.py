@@ -119,10 +119,7 @@ class TrtContextWrapper:
             assert estimator.execute_async_v3(torch.cuda.current_stream().cuda_stream) is True
             torch.cuda.current_stream().synchronize()
         self.release_estimator(estimator, stream)
-        # breakpoint()
         return output.to(torch.float32)
-
-
 
 def load_trt(model: nn.Module, trt_model: str, trt_concurrent: int = 1):
     """
@@ -140,5 +137,3 @@ def load_trt(model: nn.Module, trt_model: str, trt_concurrent: int = 1):
     assert estimator_engine is not None, 'failed to load trt {}'.format(trt_model)
     del model.fm_decoder
     model.fm_decoder = TrtContextWrapper(estimator_engine, trt_concurrent=trt_concurrent, device='cuda')
-
-
