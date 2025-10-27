@@ -1,11 +1,46 @@
-import torch
-import tensorrt as trt
+# Copyright         2025  Nvidia Corp.        (authors: Yuekai Zhang)
+#
+# See ../../../../LICENSE for clarification regarding multiple authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+This script provides utility functions for working with TensorRT in ZipVoice.
+"""
+
 import logging
 import os
 import queue
+from typing import Any, Tuple
+
+import torch
+import torch.nn as nn
+
 
 class TrtContextWrapper:
-    def __init__(self, trt_engine, trt_concurrent=1, device='cuda:0'):
+    """A wrapper class for managing TensorRT execution contexts."""
+
+    def __init__(
+        self, trt_engine: Any, trt_concurrent: int = 1, device: str = "cuda:0"
+    ):
+        """
+        Initializes the TrtContextWrapper.
+
+        Args:
+            trt_engine (Any): The TensorRT engine.
+            trt_concurrent (int, optional): The number of concurrent contexts. Defaults to 1.
+            device (str, optional): The device to use. Defaults to 'cuda:0'.
+        """
         self.trt_context_pool = queue.Queue(maxsize=trt_concurrent)
         self.trt_engine = trt_engine
         self.device = device
@@ -17,13 +52,39 @@ class TrtContextWrapper:
         assert self.trt_context_pool.empty() is False, 'no avaialbe estimator context'
         self.feat_dim = 100
 
-    def acquire_estimator(self):
+    def acquire_estimator(self) -> Tuple[list, Any]:
+        """Acquires a TensorRT context from the pool."""
         return self.trt_context_pool.get(), self.trt_engine
 
-    def release_estimator(self, context, stream):
+    def release_estimator(self, context: Any, stream: Any):
+        """
+        Releases a TensorRT context back to the pool.
+
+        Args:
+            context (Any): The TensorRT context.
+            stream (Any): The CUDA stream.
+        """
         self.trt_context_pool.put([context, stream])
 
-    def __call__(self, x, t, padding_mask, guidance_scale):
+    def __call__(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        padding_mask: torch.Tensor,
+        guidance_scale: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Executes the TensorRT engine.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+            t (torch.Tensor): The time tensor.
+            padding_mask (torch.Tensor): The padding mask tensor.
+            guidance_scale (torch.Tensor): The guidance scale tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
         x = x.to(torch.float16)
         t = t.to(torch.float16)
         padding_mask = padding_mask.to(torch.float16)
@@ -63,8 +124,16 @@ class TrtContextWrapper:
 
 
 
-def load_trt(model, trt_model, trt_concurrent=1):
-    assert os.path.exists(trt_model), f'Please export trt model first.'
+def load_trt(model: nn.Module, trt_model: str, trt_concurrent: int = 1):
+    """
+    Loads a TensorRT engine and replaces the model's fm_decoder with a TrtContextWrapper.
+
+    Args:
+        model (nn.Module): The model to modify.
+        trt_model (str): The path to the TensorRT engine file.
+        trt_concurrent (int, optional): The number of concurrent contexts. Defaults to 1.
+    """
+    assert os.path.exists(trt_model), f"Please export trt model first."
     import tensorrt as trt
     with open(trt_model, 'rb') as f:
         estimator_engine = trt.Runtime(trt.Logger(trt.Logger.INFO)).deserialize_cuda_engine(f.read())

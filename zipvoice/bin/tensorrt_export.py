@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright         2025  Xiaomi Corp.        (authors: Zengwei Yao)
+# Copyright         2025  Nvidia Corp.        (authors: Yuekai Zhang)
 #
 # See ../../../../LICENSE for clarification regarding multiple authors
 #
@@ -22,10 +23,11 @@ ONNX.
 Usage:
 
 python3 -m zipvoice.bin.tensorrt_export \
-    --model-name zipvoice \
-    --model-dir exp/zipvoice \
-    --checkpoint-name epoch-11-avg-4.pt \
-    --onnx-model-dir exp/zipvoice
+    --model-name zipvoice_distill \
+    --model-dir models/zipvoice_distill \
+    --checkpoint-name model.pt \
+    --trt-engine-file-name fm_decoder.fp16.max_batch_4.plan \
+    --tensorrt-model-dir models/zipvoice_distill_trt || exit 1
 
 `--model-name` can be `zipvoice` or `zipvoice_distill`,
     which are the models before and after distillation, respectively.
@@ -51,9 +53,9 @@ from zipvoice.tokenizer.tokenizer import SimpleTokenizer
 from zipvoice.utils.checkpoint import load_checkpoint
 from zipvoice.utils.common import AttributeDict
 from zipvoice.utils.scaling_converter import convert_scaled_to_non_scaled
-
-
 from zipvoice.models.modules.zipformer import CompactRelPositionalEncoding
+
+# Monkey-patching CompactRelPositionalEncoding.extend_pe
 def extend_pe(self, x: Tensor, left_context_len: int = 0) -> None:
     """Reset the positional encodings."""
     T = x.size(0) + left_context_len
@@ -105,10 +107,16 @@ def extend_pe(self, x: Tensor, left_context_len: int = 0) -> None:
 
     self.pe = pe.to(dtype=x.dtype)
 
+
 CompactRelPositionalEncoding.extend_pe = extend_pe
 
 
-def get_trt_kwargs_dynamic_batch(min_batch_size=1, opt_batch_size=2, max_batch_size=4):
+def get_trt_kwargs_dynamic_batch(
+    min_batch_size: int = 1,
+    opt_batch_size: int = 2,
+    max_batch_size: int = 4,
+) -> Dict:
+    """Get keyword arguments for TensorRT with dynamic batch size."""
     feat_dim = 300
     min_seq_len = 100
     opt_seq_len = 200
@@ -117,13 +125,29 @@ def get_trt_kwargs_dynamic_batch(min_batch_size=1, opt_batch_size=2, max_batch_s
     opt_shape = [(opt_batch_size, opt_seq_len, feat_dim), (opt_batch_size,), (opt_batch_size, opt_seq_len), (opt_batch_size,)]
     max_shape = [(max_batch_size, max_seq_len, feat_dim), (max_batch_size,), (max_batch_size, max_seq_len), (max_batch_size,)]
     input_names = ["x", "t", "padding_mask", "guidance_scale"]
-    return {'min_shape': min_shape, 'opt_shape': opt_shape, 'max_shape': max_shape, 'input_names': input_names}
-    
-def convert_onnx_to_trt(trt_model, trt_kwargs, onnx_model, dtype=torch.float16):
-    import tensorrt as trt
+    return {
+        "min_shape": min_shape,
+        "opt_shape": opt_shape,
+        "max_shape": max_shape,
+        "input_names": input_names,
+    }
+
+
+def convert_onnx_to_trt(
+    trt_model: str, trt_kwargs: Dict, onnx_model: str, dtype: torch.dtype = torch.float16
+):
+    """
+    Convert an ONNX model to a TensorRT engine.
+
+    Args:
+        trt_model (str): The path to save the TensorRT engine.
+        trt_kwargs (Dict): Keyword arguments for TensorRT.
+        onnx_model (str): The path to the ONNX model.
+        dtype (torch.dtype, optional): The data type to use. Defaults to torch.float16.
+    """
     logging.info("Converting onnx to trt...")
     network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-    logger = trt.Logger(trt.Logger.VERBOSE)
+    logger = trt.Logger(trt.Logger.INFO)
     builder = trt.Builder(logger)
     network = builder.create_network(network_flags)
     parser = trt.OnnxParser(network, logger)
@@ -164,13 +188,14 @@ def convert_onnx_to_trt(trt_model, trt_kwargs, onnx_model, dtype=torch.float16):
         f.write(engine_bytes)
     logging.info("Succesfully convert onnx to trt...")
 
-def get_parser():
+
+def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
     parser.add_argument(
-        "--onnx-model-dir",
+        "--tensorrt-model-dir",
         type=str,
         default="exp",
         help="Dir to the exported models",
@@ -198,6 +223,13 @@ def get_parser():
         type=str,
         default="model.pt",
         help="The name of model checkpoint.",
+    )
+
+    parser.add_argument(
+        "--trt-engine-file-name",
+        type=str,
+        default=None,
+        help="The name of TensorRT engine file.",
     )
 
     return parser
@@ -251,8 +283,6 @@ def export_onnx_fm_decoder(
 
 @torch.no_grad()
 def main():
-    import tensorrt as trt
-
     parser = get_parser()
     args = parser.parse_args()
 
@@ -305,12 +335,12 @@ def main():
     convert_scaled_to_non_scaled(model, inplace=True, is_onnx=True)
 
     logging.info("Exporting model")
-    onnx_model_dir = Path(params.onnx_model_dir)
-    onnx_model_dir.mkdir(parents=True, exist_ok=True)
+    tensorrt_model_dir = Path(params.tensorrt_model_dir)
+    tensorrt_model_dir.mkdir(parents=True, exist_ok=True)
     opset_version = 18
 
 
-    fm_decoder_onnx_file = onnx_model_dir / "fm_decoder.onnx"
+    fm_decoder_onnx_file = tensorrt_model_dir / "fm_decoder.onnx"
 
     export_onnx_fm_decoder(
         model=model,
@@ -320,7 +350,7 @@ def main():
 
     logging.info("Exported to TensorRT model")
 
-    trt_engine_file = f'{str(onnx_model_dir)}/fm_decoder.fp16.max_batch_4.plan'
+    trt_engine_file = f'{str(tensorrt_model_dir)}/{params.trt_engine_file_name}'
     trt_kwargs = get_trt_kwargs_dynamic_batch(min_batch_size=1, opt_batch_size=2, max_batch_size=4)
     convert_onnx_to_trt(trt_engine_file, trt_kwargs, fm_decoder_onnx_file, dtype=torch.float16)
 
@@ -331,6 +361,5 @@ if __name__ == "__main__":
 
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
     logging.basicConfig(format=formatter, level=logging.INFO, force=True)
-
+    import tensorrt as trt
     main()
-    # onnx_model = f'models/zipvoice_distill_onnx_trt/fm_decoder.simplified.onnx'

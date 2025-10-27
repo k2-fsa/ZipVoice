@@ -222,6 +222,8 @@ If the inference speed is unsatisfactory, you can speed it up as follows:
 
 - **CPU speedup with ONNX**: When running on CPU, you can use ONNX models with `zipvoice.bin.infer_zipvoice_onnx` for faster speed (haven't supported ONNX for dialogue generation models yet). For even faster speed, you can further set `--onnx-int8 True` to use an INT8-quantized ONNX model. Note that the quantized model will result in a certain degree of speech quality degradation. **Don't use ONNX on GPU**, as it is slower than PyTorch on GPU.
 
+- **GPU Acceleration with NVIDIA TensorRT**: For a significant performance boost on NVIDIA GPUs, first export the model to a TensorRT engine using zipvoice.bin.tensorrt_export. Then, run inference on your dataset (e.g., a Hugging Face dataset) with zipvoice.bin.infer_zipvoice. This can achieve approximately 2x the throughput compared to the standard PyTorch implementation on a GPU.
+
 #### 3.3 Memory control
 
 The given text will be splitted into chunks based on punctuation (for single-speaker speech generation) or speaker-turn symbol (for dialogue speech generation). Then, the chunked texts will be processed in batches. Therefore, the model can process arbitrarily long text with almost constant memory usage. You can control memory usage by adjusting the `--max-duration` parameter.

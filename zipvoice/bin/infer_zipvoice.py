@@ -47,6 +47,18 @@ python3 -m zipvoice.bin.infer_zipvoice \
 
 Each line of `test.tsv` is in the format of
     `{wav_name}\t{prompt_transcription}\t{prompt_wav}\t{text}`.
+
+(3) Inference of a huggingface dataset with TensorRT:
+
+python3 -m zipvoice.bin.infer_zipvoice \
+    --model-name zipvoice_distill \
+    --huggingface-dataset-name yuekai/seed_tts_cosy2 \
+    --huggingface-dataset-split wenetspeech4tts \
+    --trt-engine-path models/zipvoice_distill_onnx_trt/fm_decoder.fp16.max_batch_4.plan \
+    --batch-size 4 \
+    --enable-warmup True \
+    --num-step 4 \
+    --res-dir results
 """
 
 import argparse
@@ -88,6 +100,7 @@ from zipvoice.utils.infer import (
     remove_silence,
     rms_norm,
 )
+from zipvoice.utils.tensorrt import load_trt
 
 HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
 MODEL_DIR = {
@@ -281,10 +294,17 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--enable-trt",
-        type=str2bool,
-        default=False,
-        help="Whether to enable TensorRT for inference.",
+        "--trt-engine-path",
+        type=str,
+        default=None,
+        help="The path to the TensorRT engine file.",
+    )
+
+    parser.add_argument(
+        "--huggingface-dataset-name",
+        type=str,
+        default="yuekai/seed_tts_cosy2",
+        help="The name of huggingface dataset to use for inference.",
     )
 
     parser.add_argument(
@@ -762,7 +782,6 @@ def generate_huggingface_dataset(
     feat_scale: float = 0.1,
     sampling_rate: int = 24000,
     raw_evaluation: bool = False,
-    max_duration: float = 100,
     remove_long_sil: bool = False,
 ):
     total_t = []
@@ -966,10 +985,8 @@ def main():
     model = model.to(params.device)
     model.eval()
 
-    if params.enable_trt:
-        from zipvoice.utils.tensorrt import load_trt
-        trt_model = f'models/zipvoice_distill_onnx_trt/fm_decoder.fp16.max_batch_4.plan'
-        load_trt(model, trt_model)
+    if params.trt_engine_path:
+        load_trt(model, params.trt_engine_path)
 
     vocoder = get_vocoder(params.vocoder_path)
     vocoder = vocoder.to(params.device)
@@ -1007,8 +1024,7 @@ def main():
             remove_long_sil=params.remove_long_sil,
         )
     elif params.huggingface_dataset_split:
-        dataset_name = "yuekai/seed_tts_cosy2"
-        dataset = load_dataset(dataset_name, split=args.huggingface_dataset_split, trust_remote_code=True)
+        dataset = load_dataset(params.huggingface_dataset_name, split=args.huggingface_dataset_split, trust_remote_code=True)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn, num_workers=0)
         res_dir = params.res_dir
         os.makedirs(res_dir, exist_ok=True)
@@ -1029,7 +1045,6 @@ def main():
                 feat_scale=params.feat_scale,
                 sampling_rate=params.sampling_rate,
                 raw_evaluation=params.raw_evaluation,
-                max_duration=params.max_duration,
                 remove_long_sil=params.remove_long_sil,
             )
         generate_huggingface_dataset(
@@ -1048,14 +1063,12 @@ def main():
             feat_scale=params.feat_scale,
             sampling_rate=params.sampling_rate,
             raw_evaluation=params.raw_evaluation,
-            max_duration=params.max_duration,
             remove_long_sil=params.remove_long_sil,
         )
     else:
         assert (
             not params.raw_evaluation
         ), "Raw evaluation is only valid with --test-list"
-        start_t = dt.datetime.now()
         generate_sentence(
             save_path=params.res_wav_path,
             prompt_text=params.prompt_text,
@@ -1076,8 +1089,6 @@ def main():
             max_duration=params.max_duration,
             remove_long_sil=params.remove_long_sil,
         )
-        t = (dt.datetime.now() - start_t).total_seconds()
-        logging.info(f"Time: {t:.4f} seconds")
         logging.info(f"Saved to: {params.res_wav_path}")
     logging.info("Done")
 
