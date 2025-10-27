@@ -969,8 +969,7 @@ def main():
     if params.enable_trt:
         from zipvoice.utils.tensorrt import load_trt
         trt_model = f'models/zipvoice_distill_onnx_trt/fm_decoder.fp16.max_batch_4.plan'
-        onnx_model = f'models/zipvoice_distill_onnx_trt/fm_decoder.simplified.onnx'
-        load_trt(model, trt_model, onnx_model)
+        load_trt(model, trt_model)
 
     vocoder = get_vocoder(params.vocoder_path)
     vocoder = vocoder.to(params.device)

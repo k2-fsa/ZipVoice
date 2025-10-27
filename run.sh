@@ -9,13 +9,13 @@ fi
 
 if [ $start_stage -le 1 ] && [ $stop_stage -ge 1 ]; then
     echo "Stage 1: Export ONNX model"
-    python3 -m zipvoice.bin.onnx_export \
+    python3 -m zipvoice.bin.tensorrt_export \
         --model-name zipvoice_distill \
         --model-dir models/zipvoice_distill \
         --checkpoint-name model.pt \
         --onnx-model-dir models/zipvoice_distill_onnx_trt || exit 1
 
-    polygraphy surgeon sanitize models/zipvoice_distill_onnx_trt/fm_decoder.onnx --fold-constant -o models/zipvoice_distill_onnx_trt/fm_decoder.simplified.onnx
+    # polygraphy surgeon sanitize models/zipvoice_distill_onnx_trt/fm_decoder.onnx --fold-constant -o models/zipvoice_distill_onnx_trt/fm_decoder.simplified.onnx
 fi
 
 

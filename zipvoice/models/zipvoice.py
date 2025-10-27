@@ -176,6 +176,7 @@ class ZipVoice(nn.Module):
                 guidance_scale = guidance_scale.squeeze(-1)
             if guidance_scale.dim() == 0:
                 guidance_scale = guidance_scale.repeat(xt.shape[0])
+
             vt = self.fm_decoder(
                 x=xt, t=t, padding_mask=padding_mask, guidance_scale=guidance_scale
             )
