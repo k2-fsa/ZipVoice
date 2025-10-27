@@ -47,6 +47,17 @@ python3 -m zipvoice.bin.infer_zipvoice \
 
 Each line of `test.tsv` is in the format of
     `{wav_name}\t{prompt_transcription}\t{prompt_wav}\t{text}`.
+
+
+(3) Inference with TensorRT:
+
+python3 -m zipvoice.bin.infer_zipvoice \
+    --model-name zipvoice_distill \
+    --prompt-wav prompt.wav \
+    --prompt-text "I am a prompt." \
+    --text "I am a sentence." \
+    --res-wav-path result.wav \
+    --trt-engine-path models/zipvoice_distill_onnx_trt/fm_decoder.fp16.plan
 """
 
 import argparse
@@ -85,6 +96,7 @@ from zipvoice.utils.infer import (
     remove_silence,
     rms_norm,
 )
+from zipvoice.utils.tensorrt import load_trt
 
 HUGGINGFACE_REPO = "k2-fsa/ZipVoice"
 MODEL_DIR = {
@@ -275,6 +287,13 @@ def get_parser():
         default=False,
         help="Whether to remove long silences in the middle of the generated "
         "speech (edge silences will be removed by default).",
+    )
+
+    parser.add_argument(
+        "--trt-engine-path",
+        type=str,
+        default=None,
+        help="The path to the TensorRT engine file.",
     )
     return parser
 
@@ -806,6 +825,9 @@ def main():
 
     model = model.to(params.device)
     model.eval()
+
+    if params.trt_engine_path:
+        load_trt(model, params.trt_engine_path)
 
     vocoder = get_vocoder(params.vocoder_path)
     vocoder = vocoder.to(params.device)
