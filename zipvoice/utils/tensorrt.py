@@ -21,7 +21,7 @@ This script provides utility functions for working with TensorRT in ZipVoice.
 import logging
 import os
 import queue
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -71,7 +71,7 @@ class TrtContextWrapper:
         x: torch.Tensor,
         t: torch.Tensor,
         padding_mask: torch.Tensor,
-        guidance_scale: torch.Tensor,
+        guidance_scale: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Executes the TensorRT engine.
@@ -88,7 +88,8 @@ class TrtContextWrapper:
         x = x.to(torch.float16)
         t = t.to(torch.float16)
         padding_mask = padding_mask.to(torch.float16)
-        guidance_scale = guidance_scale.to(torch.float16)
+        if guidance_scale is not None:
+            guidance_scale = guidance_scale.to(torch.float16)
         [estimator, stream], trt_engine = self.acquire_estimator()
         # NOTE need to synchronize when switching stream
         torch.cuda.current_stream().synchronize()
@@ -102,10 +103,13 @@ class TrtContextWrapper:
             estimator.set_input_shape('x', (batch_size, x.size(1), x.size(2)))
             estimator.set_input_shape('t', (batch_size,))
             estimator.set_input_shape('padding_mask', (batch_size, padding_mask.size(1)))
-            estimator.set_input_shape('guidance_scale', (batch_size,))
+            if guidance_scale is not None:
+                estimator.set_input_shape('guidance_scale', (batch_size,))
             
             # Set input tensor addresses
-            input_data_ptrs = [x.contiguous().data_ptr(), t.contiguous().data_ptr(), padding_mask.contiguous().data_ptr(), guidance_scale.contiguous().data_ptr()]
+            input_data_ptrs = [x.contiguous().data_ptr(), t.contiguous().data_ptr(), padding_mask.contiguous().data_ptr()]
+            if guidance_scale is not None:
+                input_data_ptrs.append(guidance_scale.contiguous().data_ptr())
             for i, j in enumerate(input_data_ptrs):
                 estimator.set_tensor_address(trt_engine.get_tensor_name(i), j)
             

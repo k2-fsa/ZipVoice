@@ -238,6 +238,7 @@ def export_onnx_fm_decoder(
     model: torch.nn.Module,
     filename: str,
     opset_version: int = 18,
+    distill: bool = False,
 ) -> None:
     """Export the flow matching decoder model to ONNX format.
 
@@ -260,23 +261,32 @@ def export_onnx_fm_decoder(
     text_condition = torch.randn(1, seq_len, feat_dim, dtype=torch.float32)
     speech_condition = torch.randn(1, seq_len, feat_dim, dtype=torch.float32)
     xt= torch.cat([x, text_condition, speech_condition], dim=2)
+    xt = xt.repeat(2, 1, 1)
+    t = t.repeat(2)
+    padding_mask = padding_mask.repeat(2, 1)
+    guidance_scale = guidance_scale.repeat(2)
 
+    inputs_tensors = [xt, t, padding_mask]
+    input_names = ['x', 't', 'padding_mask']
+    dynamic_axes = {
+        'x': {0: 'N', 1: 'T'},
+        't': {0: 'N'},
+        'padding_mask': {0: 'N', 1: 'T'},
+    }
+    if distill:
+        inputs_tensors.append(guidance_scale)
+        input_names.append('guidance_scale')
+        dynamic_axes['guidance_scale'] = {0: 'N'}
     estimator = model.fm_decoder
-    estimator = torch.jit.trace(estimator, (xt, t, padding_mask, guidance_scale))
+    estimator = torch.jit.trace(estimator, inputs_tensors)
     torch.onnx.export(
         estimator,
-        (xt, t, padding_mask, guidance_scale),
+        inputs_tensors,
         filename,
         opset_version=opset_version,
-        input_names=['x', 't', 'padding_mask', 'guidance_scale'],
+        input_names=input_names,
         output_names=['v'],
-        dynamic_axes={
-            'x': {0: 'N', 1: 'T'},
-            't': {0: 'N'},
-            'padding_mask': {0: 'N', 1: 'T'},
-            'guidance_scale': {0: 'N'},
-            'v': {0: 'N', 1: 'T'},
-        },
+        dynamic_axes=dynamic_axes,
     )
     logging.info(f"Exported to {filename}")
 
@@ -346,6 +356,7 @@ def main():
         model=model,
         filename=fm_decoder_onnx_file,
         opset_version=opset_version,
+        distill=distill,
     )
 
     logging.info("Exported to TensorRT model")
