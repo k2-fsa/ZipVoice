@@ -48,17 +48,16 @@ python3 -m zipvoice.bin.infer_zipvoice \
 Each line of `test.tsv` is in the format of
     `{wav_name}\t{prompt_transcription}\t{prompt_wav}\t{text}`.
 
-(3) Inference of a huggingface dataset with TensorRT:
+
+(3) Inference with TensorRT:
 
 python3 -m zipvoice.bin.infer_zipvoice \
     --model-name zipvoice_distill \
-    --huggingface-dataset-name yuekai/seed_tts_cosy2 \
-    --huggingface-dataset-split wenetspeech4tts \
-    --trt-engine-path models/zipvoice_distill_onnx_trt/fm_decoder.fp16.max_batch_4.plan \
-    --batch-size 4 \
-    --enable-warmup True \
-    --num-step 4 \
-    --res-dir results
+    --prompt-wav prompt.wav \
+    --prompt-text "I am a prompt." \
+    --text "I am a sentence." \
+    --res-wav-path result.wav \
+    --trt-engine-path models/zipvoice_distill_onnx_trt/fm_decoder.fp16.plan
 """
 
 import argparse
@@ -73,11 +72,8 @@ import numpy as np
 import safetensors.torch
 import torch
 import torchaudio
-from datasets import load_dataset
 from huggingface_hub import hf_hub_download
 from lhotse.utils import fix_random_seed
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
 from vocos import Vocos
 
 from zipvoice.models.zipvoice import ZipVoice
@@ -299,35 +295,6 @@ def get_parser():
         default=None,
         help="The path to the TensorRT engine file.",
     )
-
-    parser.add_argument(
-        "--huggingface-dataset-name",
-        type=str,
-        default="yuekai/seed_tts_cosy2",
-        help="The name of huggingface dataset to use for inference.",
-    )
-
-    parser.add_argument(
-        "--huggingface-dataset-split",
-        type=str,
-        default=None,
-        help="The split of huggingface dataset to use for inference.",
-    )
-    
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=4,
-        help="Batch size for huggingface dataset inference.",
-    )
-
-    parser.add_argument(
-        "--enable-warmup",
-        type=str2bool,
-        default=False,
-        help="Whether to enable warmup for inference.",
-    )
-
     return parser
 
 
@@ -749,132 +716,6 @@ def generate_list(
         f"{np.sum(total_t_vocoder) / np.sum(total_wav_seconds):.4f}"
     )
 
-def collate_fn(batch):
-    target_sampling_rate = 24000
-    ids, prompt_wavs_list, prompt_texts_list, target_texts_list = [], [], [], []
-    for item in batch:
-        prompt_wav = torch.from_numpy(item['prompt_audio']['array']).float()
-        prompt_sampling_rate = item['prompt_audio']['sampling_rate']
-        if prompt_sampling_rate != target_sampling_rate:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=prompt_sampling_rate, new_freq=target_sampling_rate,
-            )
-            prompt_wav = resampler(prompt_wav)
-        prompt_wavs_list.append(prompt_wav)
-        prompt_texts_list.append(item['prompt_text'])
-        target_texts_list.append(item['target_text'])
-        ids.append(item['id'])
-    return ids, prompt_wavs_list, prompt_texts_list, target_texts_list
-
-def generate_huggingface_dataset(
-    res_dir: str,
-    data_loader: DataLoader,
-    model: torch.nn.Module,
-    vocoder: torch.nn.Module,
-    tokenizer: EmiliaTokenizer,
-    feature_extractor: VocosFbank,
-    device: torch.device,
-    num_step: int = 16,
-    guidance_scale: float = 1.0,
-    speed: float = 1.0,
-    t_shift: float = 0.5,
-    target_rms: float = 0.1,
-    feat_scale: float = 0.1,
-    sampling_rate: int = 24000,
-    raw_evaluation: bool = False,
-    remove_long_sil: bool = False,
-):
-    total_t = []
-    total_t_no_vocoder = []
-    total_t_vocoder = []
-    total_wav_seconds = []
-
-    for batch in tqdm(data_loader):
-        ids, prompt_wavs_list, prompt_texts_list, target_texts_list = batch
-
-        prompt_features_list = []
-        prompt_rms_list = []
-        for prompt_wav in prompt_wavs_list:
-            prompt_wav, prompt_rms = rms_norm(prompt_wav, target_rms)
-            prompt_rms_list.append(prompt_rms)
-            prompt_features = feature_extractor.extract(
-                prompt_wav, sampling_rate=sampling_rate
-            ).to(device)
-            prompt_features_list.append(prompt_features)
-
-        prompt_features_lens = torch.tensor(
-            [pf.size(0) for pf in prompt_features_list], device=device
-        )
-        prompt_features = torch.nn.utils.rnn.pad_sequence(
-            prompt_features_list, batch_first=True, padding_value=0.0
-        )
-
-        prompt_features = prompt_features * feat_scale
-
-        tokens = tokenizer.texts_to_token_ids(target_texts_list)
-        prompt_tokens = tokenizer.texts_to_token_ids(prompt_texts_list)
-
-        start_t = dt.datetime.now()
-
-        (
-            pred_features,
-            pred_features_lens,
-            _,
-            _,
-        ) = model.sample(
-            tokens=tokens,
-            prompt_tokens=prompt_tokens,
-            prompt_features=prompt_features,
-            prompt_features_lens=prompt_features_lens,
-            speed=speed,
-            t_shift=t_shift,
-            duration="predict",
-            num_step=num_step,
-            guidance_scale=guidance_scale,
-        )
-
-        pred_features = pred_features.permute(0, 2, 1) / feat_scale  # (B, C, T)
-
-        start_vocoder_t = dt.datetime.now()
-
-        batch_wavs = []
-        for i in range(pred_features.size(0)):
-            wav = (
-                vocoder.decode(pred_features[i][None, :, : pred_features_lens[i]])
-                .squeeze(1)
-                .clamp(-1, 1)
-            )
-            if prompt_rms_list[i] < target_rms:
-                wav = wav * prompt_rms_list[i] / target_rms
-            batch_wavs.append(wav)
-
-        end_vocoder_t = dt.datetime.now()
-
-        t_no_vocoder = (start_vocoder_t - start_t).total_seconds()
-        t_vocoder = (end_vocoder_t - start_vocoder_t).total_seconds()
-        t = t_no_vocoder + t_vocoder
-
-        batch_wav_seconds = sum(w.shape[-1] for w in batch_wavs) / sampling_rate
-
-        total_t.append(t)
-        total_t_no_vocoder.append(t_no_vocoder)
-        total_t_vocoder.append(t_vocoder)
-        total_wav_seconds.append(batch_wav_seconds)
-
-        for i in range(len(ids)):
-            save_path = f"{res_dir}/{ids[i]}.wav"
-            torchaudio.save(save_path, batch_wavs[i].cpu(), sample_rate=sampling_rate)
-
-    logging.info(f"Average RTF: {np.sum(total_t) / np.sum(total_wav_seconds):.4f}")
-    logging.info(
-        f"Average RTF w/o vocoder: "
-        f"{np.sum(total_t_no_vocoder) / np.sum(total_wav_seconds):.4f}"
-    )
-    logging.info(
-        f"Average RTF vocoder: "
-        f"{np.sum(total_t_vocoder) / np.sum(total_wav_seconds):.4f}"
-    )
-
 
 @torch.inference_mode()
 def main():
@@ -908,9 +749,9 @@ def main():
 
     assert (params.test_list is not None) ^ (
         (params.prompt_wav and params.prompt_text and params.text) is not None
-    ) ^ (params.huggingface_dataset_split is not None), (
+    ), (
         "For inference, please provide prompts and text with either '--test-list'"
-        " or '--prompt-wav, --prompt-text and --text' or '--huggingface-dataset-split'."
+        " or '--prompt-wav, --prompt-text and --text'."
     )
 
     if params.model_dir is not None:
@@ -1021,48 +862,6 @@ def main():
             sampling_rate=params.sampling_rate,
             raw_evaluation=params.raw_evaluation,
             max_duration=params.max_duration,
-            remove_long_sil=params.remove_long_sil,
-        )
-    elif params.huggingface_dataset_split:
-        dataset = load_dataset(params.huggingface_dataset_name, split=args.huggingface_dataset_split, trust_remote_code=True)
-        data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn, num_workers=0)
-        res_dir = params.res_dir
-        os.makedirs(res_dir, exist_ok=True)
-        if args.enable_warmup:
-            generate_huggingface_dataset(
-                res_dir=params.res_dir,
-                data_loader=data_loader,
-                model=model,
-                vocoder=vocoder,
-                tokenizer=tokenizer,
-                feature_extractor=feature_extractor,
-                device=params.device,
-                num_step=params.num_step,
-                guidance_scale=params.guidance_scale,
-                speed=params.speed,
-                t_shift=params.t_shift,
-                target_rms=params.target_rms,
-                feat_scale=params.feat_scale,
-                sampling_rate=params.sampling_rate,
-                raw_evaluation=params.raw_evaluation,
-                remove_long_sil=params.remove_long_sil,
-            )
-        generate_huggingface_dataset(
-            res_dir=params.res_dir,
-            data_loader=data_loader,
-            model=model,
-            vocoder=vocoder,
-            tokenizer=tokenizer,
-            feature_extractor=feature_extractor,
-            device=params.device,
-            num_step=params.num_step,
-            guidance_scale=params.guidance_scale,
-            speed=params.speed,
-            t_shift=params.t_shift,
-            target_rms=params.target_rms,
-            feat_scale=params.feat_scale,
-            sampling_rate=params.sampling_rate,
-            raw_evaluation=params.raw_evaluation,
             remove_long_sil=params.remove_long_sil,
         )
     else:
