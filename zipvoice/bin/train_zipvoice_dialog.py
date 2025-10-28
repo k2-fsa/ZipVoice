@@ -723,7 +723,7 @@ def run(rank, world_size, args):
     # Set epoch to a large number to ignore it.
     if params.num_iters > 0:
         params.num_epochs = 1000000
-    with open(params.model_config, "r") as f:
+    with open(params.model_config, "r", encoding="utf-8") as f:
         model_config = json.load(f)
     params.update(model_config["model"])
     params.update(model_config["feature"])
