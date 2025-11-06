@@ -1,3 +1,0 @@
-tensorrt==10.7.0
-#onnx
-#onnxscript

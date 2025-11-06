@@ -6,14 +6,13 @@ echo "Start stage: $stage, Stop stage: $stop_stage"
 echo "Model name: $model_name"
 export CUDA_VISIBLE_DEVICES=0
 export PYTHONPATH=$PYTHONPATH:/workspace/ZipVoice
-export PYTHONPATH=$PYTHONPATH:/workspace_yuekai/tts/ZipVoice_Triton
 
 MODEL_DIR=models # huggingface model dir
 MODEL_REPO=./model_repo_${model_name}
 
 if [ "$stage" -le 1 ] && [ "$stop_stage" -ge 1 ]; then
     echo "Stage 1: Download huggingface models"
-    huggingface-cli download k2-fsa/ZipVoice --local-dir $MODEL_DIR
+    hf download k2-fsa/ZipVoice --local-dir $MODEL_DIR || exit 1
 fi
 
 if [ "$stage" -le 2 ] && [ "$stop_stage" -ge 2 ]; then
@@ -72,8 +71,7 @@ if [ "$stage" -le 7 ] && [ "$stop_stage" -ge 7 ]; then
         --max_batch_size 4 \
         --use_speaker_cache \
         --prompt_audio prompt_short.wav \
-        --prompt_text "希望你以后能够做得比我还好呦。" \
-        --verbose
+        --prompt_text "希望你以后能够做得比我还好呦。"
 fi
 
 if [ "$stage" -le 8 ] && [ "$stop_stage" -ge 8 ]; then
@@ -82,6 +80,6 @@ if [ "$stage" -le 8 ] && [ "$stop_stage" -ge 8 ]; then
     split_name=wenetspeech4tts
     for num_task in ${num_tasks[@]}; do
         log_dir=./log_spk_cache_pytriton_${model_name}_concurrent_${num_task}_${split_name}
-        python3 client_grpc.py  --num-tasks $num_task --huggingface-dataset yuekai/seed_tts --split-name $split_name --log-dir $log_dir --use-spk2info-cache True
+        python3 client_grpc.py  --num-tasks $num_task --huggingface-dataset yuekai/seed_tts_cosy2 --split-name $split_name --log-dir $log_dir --use-spk2info-cache True
     done
 fi

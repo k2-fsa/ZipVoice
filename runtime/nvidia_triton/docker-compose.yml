@@ -1,6 +1,6 @@
 services:
   tts:
-    image: soar97/triton-f5-tts:24.12
+    image: soar97/triton-zipvoice:24.12
     shm_size: '1gb'
     ports:
       - "8000:8000"
@@ -8,7 +8,7 @@ services:
       - "8002:8002"
     environment:
       - PYTHONIOENCODING=utf-8
-      - MODEL_ID=${MODEL_ID}
+      - MODEL=${MODEL}
     deploy:
       resources:
         reservations:
@@ -17,4 +17,4 @@ services:
               device_ids: ['0']
               capabilities: [gpu]
     command: >
-      /bin/bash -c "git clone https://github.com/yuekaizhang/ZipVoice.git -b triton && pip install -r ZipVoice/requirements.txt && cd ZipVoice/runtime/nvida_triton && pip install -r requirements.txt && bash run.sh 1 4 $MODEL"
+      /bin/bash -c "git clone https://github.com/yuekaizhang/ZipVoice.git -b triton && bash run.sh 1 4 $MODEL"
