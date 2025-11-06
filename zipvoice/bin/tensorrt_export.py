@@ -41,10 +41,8 @@ from pathlib import Path
 from typing import Dict
 import math
 
-import onnx
 import safetensors.torch
 import torch
-from onnxruntime.quantization import QuantType, quantize_dynamic
 from torch import Tensor, nn
 
 from zipvoice.models.zipvoice import ZipVoice
@@ -287,6 +285,7 @@ def export_onnx_fm_decoder(
         input_names=input_names,
         output_names=['v'],
         dynamic_axes=dynamic_axes,
+        dynamo=False,
     )
     logging.info(f"Exported to {filename}")
 

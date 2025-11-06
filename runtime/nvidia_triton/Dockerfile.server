@@ -1,0 +1,6 @@
+FROM nvcr.io/nvidia/tritonserver:24.12-py3
+RUN pip install tritonclient[grpc] tensorrt-llm==0.16.0 torchaudio==2.5.1 jieba pypinyin librosa vocos
+COPY ./requirements.txt /workspace/requirements.txt
+RUN pip install -r /workspace/requirements.txt
+WORKDIR /workspace
+
