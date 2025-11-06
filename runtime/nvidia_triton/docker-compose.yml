@@ -17,4 +17,4 @@ services:
               device_ids: ['0']
               capabilities: [gpu]
     command: >
-      /bin/bash -c "git clone https://github.com/yuekaizhang/ZipVoice.git -b triton && bash run.sh 1 4 $MODEL"
+      /bin/bash -c "git clone https://github.com/yuekaizhang/ZipVoice.git -b triton && cd ZipVoice/runtime/nvidia_triton && bash run.sh 1 4 $MODEL"
