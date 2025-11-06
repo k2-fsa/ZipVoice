@@ -32,6 +32,12 @@ bash run.sh 0 4 F5TTS_v1_Base
 > [!IMPORTANT]  
 > If train or finetune with fp32, add `--dtype float32` flag when converting checkpoint in `run.sh` phase 1.
 
+
+### Pytriton Server
+```sh
+python3 client_http.py
+```
+
 ### HTTP Client
 ```sh
 python3 client_http.py
