@@ -1,0 +1,9 @@
+FROM nvcr.io/nvidia/tritonserver:24.12-py3
+
+RUN pip install tritonclient[grpc] torchaudio==2.5.1 librosa onnx tensorrt==10.7.0 nvidia-pytriton==0.7.0 && \
+    python3 -m pip install k2==1.24.4.dev20250208+cuda12.1.torch2.5.1 -f https://k2-fsa.github.io/k2/cuda.html && \
+    python3 -m pip install -r https://raw.githubusercontent.com/k2-fsa/ZipVoice/master/requirements.txt
+RUN pip install datasets==3.1.0
+# https://github.com/k2-fsa/k2/blob/master/k2/python/k2/__init__.py#L13 delete the cuda version check
+RUN sed -i '/if (/,/^    )/d' /usr/local/lib/python3.12/dist-packages/k2/__init__.py
+WORKDIR /workspace

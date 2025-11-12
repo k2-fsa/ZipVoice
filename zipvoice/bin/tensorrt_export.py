@@ -41,10 +41,8 @@ from pathlib import Path
 from typing import Dict
 import math
 
-import onnx
 import safetensors.torch
 import torch
-from onnxruntime.quantization import QuantType, quantize_dynamic
 from torch import Tensor, nn
 
 from zipvoice.models.zipvoice import ZipVoice
@@ -232,6 +230,13 @@ def get_parser() -> argparse.ArgumentParser:
         help="The name of TensorRT engine file.",
     )
 
+    parser.add_argument(
+        "--max-batch-size",
+        type=int,
+        default=4,
+        help="The maximum batch size to use for TensorRT.",
+    )
+
     return parser
 
 def export_onnx_fm_decoder(
@@ -287,6 +292,7 @@ def export_onnx_fm_decoder(
         input_names=input_names,
         output_names=['v'],
         dynamic_axes=dynamic_axes,
+        dynamo=False,
     )
     logging.info(f"Exported to {filename}")
 
@@ -362,7 +368,7 @@ def main():
     logging.info("Exported to TensorRT model")
 
     trt_engine_file = f'{str(tensorrt_model_dir)}/{params.trt_engine_file_name}'
-    trt_kwargs = get_trt_kwargs_dynamic_batch(min_batch_size=1, opt_batch_size=2, max_batch_size=4)
+    trt_kwargs = get_trt_kwargs_dynamic_batch(min_batch_size=1, opt_batch_size=2, max_batch_size=params.max_batch_size)
     convert_onnx_to_trt(trt_engine_file, trt_kwargs, fm_decoder_onnx_file, dtype=torch.float16)
 
     logging.info("Done!")

@@ -261,7 +261,13 @@ If you have trouble connecting to HuggingFace when downloading the pre-trained m
 
 See the [egs](egs) directory for training, fine-tuning and evaluation examples.
 
-## C++ Deployment
+## Production Deployment
+
+### NVIDIA Triton GPU Runtime
+
+For production-ready deployment with high performance and scalability, check out the [Triton Inference Server integration](runtime/nvidia_triton/) that provides optimized TensorRT engines, concurrent request handling, and both gRPC/HTTP APIs for enterprise use.
+
+### CPU Deployment
 
 Check [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx/pull/2487#issuecomment-3227884498) for the C++ deployment solution on CPU.
 
