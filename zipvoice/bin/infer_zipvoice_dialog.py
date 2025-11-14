@@ -1066,7 +1066,7 @@ def generate_list(
     total_t_vocoder = []
     total_wav_seconds = []
 
-    with open(test_list, "r") as fr:
+    with open(test_list, "r", encoding="utf-8") as fr:
         lines = fr.readlines()
 
     for i, line in enumerate(lines):
@@ -1202,7 +1202,7 @@ def main():
         "spk_b_id": tokenizer.spk_b_id,
     }
 
-    with open(model_config, "r") as f:
+    with open(model_config, "r", encoding="utf-8") as f:
         model_config = json.load(f)
 
     if params.model_name == "zipvoice_dialog":

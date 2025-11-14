@@ -111,7 +111,7 @@ def main():
     params.update(vars(args))
     params.exp_dir = Path(params.exp_dir)
 
-    with open(params.exp_dir / "model.json", "r") as f:
+    with open(params.exp_dir / "model.json", "r", encoding="utf-8") as f:
         model_config = json.load(f)
 
     # Any tokenizer can be used here.
