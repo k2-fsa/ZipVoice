@@ -142,11 +142,11 @@ To generate single-speaker speech with our pre-trained ZipVoice or ZipVoice-Dist
 #### 1.1 Inference of a single sentence
 
 ```bash
-python3 -m zipvoice.bin.infer_zipvoice \
-    --model-name zipvoice \
+uv run python3 -m zipvoice.bin.infer_zipvoice \
+    --model-name zipvoice_distill \
     --prompt-wav prompt.wav \
-    --prompt-text "I am the transcription of the prompt wav." \
-    --text "I am the text to be synthesized." \
+    --prompt-text "No one has a finer command of language than the person who keeps his mouth shut." \
+    --text "Mother Nature does not hurry, yet everything is accomplished. Look deep into the forest, and you will understand everything better. In all her things, there is something of the marvelous." \
     --res-wav-path result.wav
 ```
 - `--model-name` can be `zipvoice` or `zipvoice_distill`, which are models before and after distillation, respectively.
@@ -155,7 +155,7 @@ python3 -m zipvoice.bin.infer_zipvoice \
 #### 1.2 Inference of a list of sentences
 
 ```bash
-python3 -m zipvoice.bin.infer_zipvoice \
+uv run python3 -m zipvoice.bin.infer_zipvoice \
     --model-name zipvoice \
     --test-list test.tsv \
     --res-dir results
@@ -170,7 +170,7 @@ python3 -m zipvoice.bin.infer_zipvoice \
 To generate two-party spoken dialogues with our pre-trained ZipVoice-Dialogue or ZipVoice-Dialogue-Stereo models, use the following commands (Required models will be downloaded from HuggingFace):
 
 ```bash
-python3 -m zipvoice.bin.infer_zipvoice_dialog \
+uv run python3 -m zipvoice.bin.infer_zipvoice_dialog \
     --model-name "zipvoice_dialog" \
     --test-list test.tsv \
     --res-dir results
