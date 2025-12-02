@@ -115,7 +115,7 @@ if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
         --dest-dir data/fbank/emilia_splits \
         --dataset emilia \
         --subset ${subset} \
-        --splits-cuts 1 \
+        --split-cuts 1 \
         --split-begin 0 \
         --split-end 2000 \
         --num-jobs ${nj}
