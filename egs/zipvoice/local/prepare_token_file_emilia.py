@@ -52,7 +52,7 @@ def get_args():
 
 def get_pinyin_tokens(pinyin: Path) -> List[str]:
     phones = set()
-    with open(pinyin, "r") as f:
+    with open(pinyin, "r", encoding="utf-8") as f:
         for line in f:
             x = line.strip()
             initial = to_initials(x, strict=False)
