@@ -271,6 +271,13 @@ For production-ready deployment with high performance and scalability, check out
 
 Check [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx/pull/2487#issuecomment-3227884498) for the C++ deployment solution on CPU.
 
+### Experimental Jetson Nano runtime
+
+For an experimental, fixed-shape deployment on the original Jetson Nano with
+CUDA 10.0 and TensorRT 6, see [runtime/jetson_nano](runtime/jetson_nano).
+Its tested scope and limitations are documented separately from the default
+inference and Triton paths.
+
 ## Discussion & Communication
 
 You can directly discuss on [Github Issues](https://github.com/k2-fsa/ZipVoice/issues).
