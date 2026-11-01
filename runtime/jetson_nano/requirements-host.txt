@@ -1,0 +1,4 @@
+# Conversion is performed on a host; it does not need CUDA or TensorRT.
+numpy>=1.24
+onnx==1.19.1
+onnxruntime>=1.16

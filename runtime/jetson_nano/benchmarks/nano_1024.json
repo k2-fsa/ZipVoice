@@ -1,0 +1,156 @@
+{
+  "device": "Jetson Nano A02 4GB, sm53",
+  "stack": {
+    "os": "Ubuntu 18.04 / L4T R32.3.1",
+    "cuda": "10.0.326",
+    "cudnn": "7.6.3",
+    "tensorrt_major": 6,
+    "target_python": "3.8",
+    "host_conversion_python": "3.13"
+  },
+  "workload": {
+    "model": "ZipVoice-Distill",
+    "total_frames": 1024,
+    "prompt_frames": 568,
+    "steps": 4,
+    "batch": 1,
+    "guidance": 1.0,
+    "time_shift": 0.5,
+    "prompt_seconds": 6.056708333333333,
+    "fitted_speed": 1.0125558376312256,
+    "encoder": "CPU INT8 ONNX",
+    "vocoder": "separately prepared FP32 TensorRT 6 engine"
+  },
+  "timing_boundary": {
+    "included": [
+      "one text encoder pass",
+      "random initial state",
+      "four decoder evaluations and integration",
+      "vocoder",
+      "ISTFT",
+      "silence trimming"
+    ],
+    "excluded": [
+      "model loading",
+      "reference feature preparation",
+      "speed fitting",
+      "file writing"
+    ],
+    "warmups_per_process": 1,
+    "measured_runs": 5
+  },
+  "prototype": {
+    "mean_rtf": 0.7708276581701957,
+    "fresh_rtf": 0.7694264723899333,
+    "baseline_own_previous_optimized_runtime_rtf": 0.834339952234734,
+    "baseline_is_upstream": false
+  },
+  "clean_tree_retest": {
+    "mean_rtf": 0.7700811942477996,
+    "fresh_rtf": 0.771846461126128,
+    "runs": [
+      {
+        "event": "synthesis",
+        "warmup": false,
+        "seed": 20261030,
+        "steps": 4,
+        "total_frames": 1024,
+        "prompt_frames": 568,
+        "speed": 1.0125558376312256,
+        "cached_prompt_features": true,
+        "elapsed_seconds": 3.7306552270001703,
+        "audio_seconds": 4.8533333333333335,
+        "rtf": 0.768678961607178,
+        "decoder_seconds": 3.439135544000237
+      },
+      {
+        "event": "synthesis",
+        "warmup": false,
+        "seed": 20261031,
+        "steps": 4,
+        "total_frames": 1024,
+        "prompt_frames": 568,
+        "speed": 1.0125558376312256,
+        "cached_prompt_features": true,
+        "elapsed_seconds": 3.7258729909990507,
+        "audio_seconds": 4.8533333333333335,
+        "rtf": 0.7676936107827714,
+        "decoder_seconds": 3.4391077770014817
+      },
+      {
+        "event": "synthesis",
+        "warmup": false,
+        "seed": 20261032,
+        "steps": 4,
+        "total_frames": 1024,
+        "prompt_frames": 568,
+        "speed": 1.0125558376312256,
+        "cached_prompt_features": true,
+        "elapsed_seconds": 3.7396389139994426,
+        "audio_seconds": 4.832,
+        "rtf": 0.7739318944535271,
+        "decoder_seconds": 3.440497839999807
+      },
+      {
+        "event": "synthesis",
+        "warmup": false,
+        "seed": 20261033,
+        "steps": 4,
+        "total_frames": 1024,
+        "prompt_frames": 568,
+        "speed": 1.0125558376312256,
+        "cached_prompt_features": true,
+        "elapsed_seconds": 3.736599142999694,
+        "audio_seconds": 4.8533333333333335,
+        "rtf": 0.7699036695741127,
+        "decoder_seconds": 3.4416052369997487
+      },
+      {
+        "event": "synthesis",
+        "warmup": false,
+        "seed": 20261034,
+        "steps": 4,
+        "total_frames": 1024,
+        "prompt_frames": 568,
+        "speed": 1.0125558376312256,
+        "cached_prompt_features": true,
+        "elapsed_seconds": 3.7380268249999062,
+        "audio_seconds": 4.8533333333333335,
+        "rtf": 0.7701978348214092,
+        "decoder_seconds": 3.441450791000534
+      }
+    ],
+    "mel_bitwise_equal_to_prototype": true,
+    "stage_exit_codes": {
+      "pr_istft": 0,
+      "pr_decoder": 0,
+      "pr_pipeline": 0,
+      "pr_fresh": 0
+    },
+    "new_oc_events": 0
+  },
+  "correctness": {
+    "host_conversion_relative_rmse": 2.4230833060479755e-07,
+    "decoder_max_relative_rmse": 0.004494472171348908,
+    "decoder_seeds": 3,
+    "decoder_time_points": [
+      0.0,
+      0.14285714285714285,
+      0.3333333333333333,
+      0.6
+    ],
+    "resident_state_bitwise_equal": true,
+    "istft_test_frames": [
+      5,
+      456
+    ],
+    "cuda_ctest_groups": 4
+  },
+  "validation_limits": [
+    "The decoder numerical reference executes the same source FP16 weight values in FP32.",
+    "The clean-tree library was rebuilt; the measured decoder and vocoder engines were reused from the validated deployment.",
+    "The cleaned full decoder engine build was not repeated.",
+    "Vocoder graph conversion and model/tokenizer downloads are outside this contribution.",
+    "Other GPUs, shapes and concurrent ASR are not validated."
+  ]
+}

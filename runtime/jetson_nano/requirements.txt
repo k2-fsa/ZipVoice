@@ -1,0 +1,5 @@
+# CPU Python packages only. Use JetPack's existing CUDA/TensorRT installation.
+numpy
+onnxruntime
+soundfile
+kaldi-native-fbank
